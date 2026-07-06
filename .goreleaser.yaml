@@ -46,3 +46,20 @@ release:
   draft: false
   prerelease: auto
   name_template: "{{.ProjectName}} {{.Tag}}"
+
+brews:
+  - name: cpulse
+    repository:
+      owner: hyturing
+      name: homebrew-cpulse
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: hyturing
+      email: hyturing@gmail.com
+    homepage: "https://github.com/hyturing/compose-pulse"
+    description: "Real-time terminal UI for Docker Compose dependency graphs"
+    license: "MIT"
+    install: |
+      bin.install "cpulse"
+    test: |
+      assert_match "cpulse", shell_output("#{bin}/cpulse --version")
