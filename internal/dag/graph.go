@@ -20,41 +20,55 @@ type Graph struct {
 // Returns an error if a circular dependency is detected.
 func Build(cfg *compose.Config) (*Graph, error) {
 	byName := make(map[string]*Node, len(cfg.Services))
-	for name := range cfg.Services {
+	serviceNames := sortedServiceNames(cfg.Services)
+	for _, name := range serviceNames {
 		byName[name] = &Node{Name: name, State: docker.StatePending}
 	}
 
 	inDegree := make(map[string]int, len(cfg.Services))
-	for name, svc := range cfg.Services {
+	for _, name := range serviceNames {
+		svc := cfg.Services[name]
 		deps := sortedMapKeys(svc.DependsOn)
 		byName[name].Deps = deps
+		if len(deps) > 0 {
+			byName[name].DepConditions = make(map[string]string, len(deps))
+			for _, dep := range deps {
+				cond := svc.DependsOn[dep].Condition
+				if cond == "" {
+					cond = "service_started"
+				}
+				byName[name].DepConditions[dep] = cond
+			}
+		}
 		inDegree[name] = len(deps)
 
 		for _, dep := range deps {
 			if _, ok := byName[dep]; !ok {
 				return nil, fmt.Errorf("service %q depends on unknown service %q", name, dep)
 			}
-			// Full edge set — used by Kahn's algorithm.
 			byName[dep].Children = append(byName[dep].Children, byName[name])
 		}
 
-		// Each node is a "tree child" of its first dependency only (alphabetical).
-		// This lets the renderer draw a clean tree even for diamond dependencies;
-		// extra deps are shown inline in the node label.
 		if len(deps) > 0 {
 			byName[deps[0]].TreeChildren = append(byName[deps[0]].TreeChildren, byName[name])
 		}
 	}
 
-	// Kahn's algorithm: topological sort + level assignment.
+	for _, node := range byName {
+		sort.Slice(node.Children, func(i, j int) bool {
+			return node.Children[i].Name < node.Children[j].Name
+		})
+		sort.Slice(node.TreeChildren, func(i, j int) bool {
+			return node.TreeChildren[i].Name < node.TreeChildren[j].Name
+		})
+	}
+
 	queue := make([]*Node, 0)
-	for name, node := range byName {
+	for _, name := range serviceNames {
 		if inDegree[name] == 0 {
-			queue = append(queue, node)
+			queue = append(queue, byName[name])
 		}
 	}
-	// Sort roots for stable ordering.
-	sort.Slice(queue, func(i, j int) bool { return queue[i].Name < queue[j].Name })
 
 	ordered := make([]*Node, 0, len(byName))
 	for len(queue) > 0 {
@@ -69,6 +83,7 @@ func Build(cfg *compose.Config) (*Graph, error) {
 			}
 			if inDegree[child.Name] == 0 {
 				queue = append(queue, child)
+				sort.Slice(queue, func(i, j int) bool { return queue[i].Name < queue[j].Name })
 			}
 		}
 	}
@@ -114,4 +129,13 @@ func sortedMapKeys(m compose.DependsOn) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func sortedServiceNames(services map[string]compose.Service) []string {
+	names := make([]string, 0, len(services))
+	for name := range services {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

@@ -1,20 +1,24 @@
 package docker
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
 	dockerclient "github.com/docker/docker/client"
 )
 
+// dockerAPI is the subset of the Docker SDK used by Client (mockable in tests).
+type dockerAPI interface {
+	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
+	ContainerLogs(ctx context.Context, containerID string, options container.LogsOptions) (io.ReadCloser, error)
+	Close() error
+}
+
 // Client wraps the official Docker SDK client.
 type Client struct {
-	dc *dockerclient.Client
+	api dockerAPI
 }
 
 // NewClient creates a Client connected to the local Docker daemon via DOCKER_HOST / Unix socket.
@@ -26,37 +30,35 @@ func NewClient() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{dc: dc}, nil
+	return &Client{api: dc}, nil
 }
 
 // Close releases the underlying Docker client.
-func (c *Client) Close() error { return c.dc.Close() }
+func (c *Client) Close() error { return c.api.Close() }
 
-// FetchStates returns a ContainerState for each service name.
-// Services not found in the running container list are reported as StatePending.
-func (c *Client) FetchStates(ctx context.Context, services []string) (map[string]ContainerState, error) {
-	f := filters.NewArgs()
-	f.Add("label", "com.docker.compose.service")
+// FetchStatesByID returns observed states keyed by container ID.
+// IDs not found in the current list are omitted; callers keep the last known state.
+func (c *Client) FetchStatesByID(ctx context.Context, ids []string) (map[string]ContainerState, error) {
+	if len(ids) == 0 {
+		return map[string]ContainerState{}, nil
+	}
 
-	containers, err := c.dc.ContainerList(ctx, container.ListOptions{
-		All:     true,
-		Filters: f,
-	})
+	containers, err := c.api.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
 		return nil, err
 	}
 
-	states := make(map[string]ContainerState, len(services))
-	for _, svc := range services {
-		states[svc] = StatePending
+	want := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		want[id] = struct{}{}
 	}
 
+	states := make(map[string]ContainerState, len(ids))
 	for _, ctr := range containers {
-		svcName := ctr.Labels["com.docker.compose.service"]
-		if _, ok := states[svcName]; !ok {
+		if _, ok := want[ctr.ID]; !ok {
 			continue
 		}
-		states[svcName] = mapContainerState(ctr)
+		states[ctr.ID] = mapContainerState(ctr)
 	}
 	return states, nil
 }
@@ -84,28 +86,4 @@ func mapContainerState(ctr container.Summary) ContainerState {
 	default:
 		return StateStarting
 	}
-}
-
-// Logs returns the last n lines of stdout+stderr for containerID.
-func (c *Client) Logs(ctx context.Context, containerID string, lines int) (string, error) {
-	tail := "200"
-	if lines > 0 {
-		tail = fmt.Sprintf("%d", lines)
-	}
-	opts := container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Tail:       tail,
-	}
-	reader, err := c.dc.ContainerLogs(ctx, containerID, opts)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = reader.Close() }()
-
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, reader); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
 }

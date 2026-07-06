@@ -10,80 +10,47 @@ import (
 	"github.com/hyturing/compose-pulse/internal/docker"
 )
 
-// renderTree renders the dependency tree in pstree style.
-// cursor is an index into g.Visual, which exactly matches visual row order.
-func renderTree(g *dag.Graph, cursor, spinFrame, width int) string {
-	if len(g.Visual) == 0 {
-		return "No services found."
-	}
-
-	// Map each node to its position in the visual (depth-first) order.
-	// This is what the cursor indexes into.
-	visualIdx := make(map[*dag.Node]int, len(g.Visual))
-	for i, n := range g.Visual {
-		visualIdx[n] = i
-	}
-
-	var sb strings.Builder
-	for i, root := range g.Roots {
-		isLast := i == len(g.Roots)-1
-		renderNode(&sb, root, "", isLast, true, cursor, spinFrame, visualIdx, width)
-	}
-
-	sb.WriteString("\n")
-	sb.WriteString(styleStatusBar.Render("↑/↓ navigate   enter open logs   q quit"))
-	return sb.String()
+func isSelectable(row Row) bool {
+	return row.Kind == RowComposeNode || row.Kind == RowStandalone
 }
 
-func renderNode(
-	sb *strings.Builder,
-	n *dag.Node,
-	prefix string,
-	isLast bool,
-	isRoot bool,
-	cursor, spinFrame int,
-	visualIdx map[*dag.Node]int,
-	width int,
-) {
-	var linePrefix string
-	var childPrefix string
-
-	switch {
-	case isRoot:
-		linePrefix = "  "
-		childPrefix = "  "
-	case isLast:
-		linePrefix = prefix + "└─ "
-		childPrefix = prefix + "   "
-	default:
-		linePrefix = prefix + "├─ "
-		childPrefix = prefix + "│  "
-	}
-
-	indicator := stateIndicator(n.State, spinFrame)
+func formatComposeLine(row Row, spinFrame int) string {
+	n := row.Node
+	eff, waitingOn := dag.EffectiveState(n, row.Graph)
+	indicator := stateIndicator(eff, spinFrame)
 	name := styleName.Render(n.Name)
-	stateTxt := styleDim.Render("(" + n.State.String() + ")")
+	stateTxt := formatEffectiveStateLabel(eff, waitingOn, n)
 
-	// Show extra deps (beyond the primary/first one) inline.
 	var extraDeps string
 	if len(n.Deps) > 1 {
 		extraDeps = styleDim.Render(" also←" + strings.Join(n.Deps[1:], ","))
 	}
 
-	line := fmt.Sprintf("%s%s %s %s%s", linePrefix, indicator, name, stateTxt, extraDeps)
-
-	if visualIdx[n] == cursor {
-		line = styleSelected.Width(width).Render(line)
-	}
-
-	sb.WriteString(line + "\n")
-
-	for i, child := range n.TreeChildren {
-		renderNode(sb, child, childPrefix, i == len(n.TreeChildren)-1, false, cursor, spinFrame, visualIdx, width)
-	}
+	return fmt.Sprintf("%s%s %s %s%s", row.linePrefix, indicator, name, stateTxt, extraDeps)
 }
 
-// stateIndicator returns a colored symbol for the given state.
+func formatEffectiveStateLabel(eff docker.ContainerState, waitingOn []string, n *dag.Node) string {
+	if eff == docker.StatePending {
+		if len(waitingOn) > 0 {
+			parts := make([]string, len(waitingOn))
+			for i, w := range waitingOn {
+				cond := n.DepConditions[w]
+				if cond == "" {
+					cond = "service_started"
+				}
+				if cond == "service_healthy" {
+					parts[i] = w + ":healthy"
+				} else {
+					parts[i] = w
+				}
+			}
+			return styleDim.Render("(pending ← " + strings.Join(parts, ", ") + ")")
+		}
+		return styleDim.Render("(not started)")
+	}
+	return styleDim.Render("(" + n.State.String() + ")")
+}
+
 func stateIndicator(s docker.ContainerState, frame int) string {
 	switch s {
 	case docker.StateHealthy:
@@ -100,4 +67,16 @@ func stateIndicator(s docker.ContainerState, frame int) string {
 	default:
 		return "?"
 	}
+}
+
+func formatStandaloneLine(r Row, indicator string) string {
+	name := styleName.Render(r.Standalone.Name)
+	image := styleDim.Render(r.Label)
+	stateTxt := styleDim.Render("(" + r.Standalone.State.String() + ")")
+	return fmt.Sprintf("  %s %s %s %s", indicator, name, image, stateTxt)
+}
+
+// renderView renders a flat graph (used in tests).
+func renderView(rows []Row, cursor, spinFrame, width int) string {
+	return renderGraphContent(rows, cursor, 0, spinFrame, width, len(rows)+1)
 }

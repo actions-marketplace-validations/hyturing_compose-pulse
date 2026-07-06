@@ -7,16 +7,16 @@ import (
 
 const pollInterval = 500 * time.Millisecond
 
-// StateMsg is a Bubble Tea message emitted each poll cycle.
-type StateMsg struct {
-	States map[string]ContainerState
+// PollMsg is a Bubble Tea message emitted each poll cycle with full container metadata.
+type PollMsg struct {
+	Containers []ContainerInfo
 }
 
-// StartCh launches a background goroutine that polls Docker every 500 ms and
-// sends a StateMsg on the returned channel. The goroutine exits when ctx is
+// StartPollCh launches a background goroutine that polls Docker every 500 ms and
+// sends a PollMsg on the returned channel. The goroutine exits when ctx is
 // cancelled and the channel is then closed.
-func (c *Client) StartCh(ctx context.Context, services []string) <-chan StateMsg {
-	ch := make(chan StateMsg, 1)
+func (c *Client) StartPollCh(ctx context.Context) <-chan PollMsg {
+	ch := make(chan PollMsg, 1)
 	go func() {
 		defer close(ch)
 		ticker := time.NewTicker(pollInterval)
@@ -26,12 +26,12 @@ func (c *Client) StartCh(ctx context.Context, services []string) <-chan StateMsg
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				states, err := c.FetchStates(ctx, services)
+				containers, err := c.ListAll(ctx)
 				if err != nil {
 					continue
 				}
 				select {
-				case ch <- StateMsg{States: states}:
+				case ch <- PollMsg{Containers: containers}:
 				default: // drop frame if UI is still processing the previous one
 				}
 			}
