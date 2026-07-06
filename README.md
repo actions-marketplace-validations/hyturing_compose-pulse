@@ -45,8 +45,13 @@ cpulse uses a **lazydocker-style split dashboard**:
 
 ```sh
 brew tap hyturing/cpulse
+brew trust hyturing/cpulse   # required once for third-party taps (Homebrew 4.6+)
 brew install cpulse
 ```
+
+Verify: `cpulse --version`
+
+To upgrade later: `brew update && brew upgrade cpulse`
 
 ### Download a binary
 
