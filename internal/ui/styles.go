@@ -3,25 +3,48 @@ package ui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	// State indicator colors.
-	colorHealthy   = lipgloss.Color("#22c55e") // green
-	colorStarting  = lipgloss.Color("#eab308") // yellow
-	colorUnhealthy = lipgloss.Color("#ef4444") // red
-	colorPending   = lipgloss.Color("#6b7280") // gray
-	colorSelected  = lipgloss.Color("#1e3a5f") // dark blue background for cursor row
+	colorHealthy   = lipgloss.Color("#22c55e")
+	colorStarting  = lipgloss.Color("#eab308")
+	colorUnhealthy = lipgloss.Color("#ef4444")
+	colorPending   = lipgloss.Color("#6b7280")
+	colorSelected  = lipgloss.Color("#1e3a5f")
 
-	// Tree.
 	styleSelected = lipgloss.NewStyle().Background(colorSelected)
 	styleName     = lipgloss.NewStyle().Bold(true)
 	styleDim      = lipgloss.NewStyle().Faint(true)
 
-	// Log modal.
-	styleModal = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#6366f1")).
-			Padding(1, 2)
+	stylePanel = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("#64748b"))
 
-	// Search bar inside the modal.
+	stylePanelFocus = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("#6366f1"))
+
+	stylePanelTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#e2e8f0"))
+
+	styleLogHeader = lipgloss.NewStyle().
+			Bold(true).
+			Background(lipgloss.Color("#1e293b")).
+			Foreground(lipgloss.Color("#f1f5f9"))
+
+	styleLogFooter = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#94a3b8")).
+			Faint(true).
+			Background(lipgloss.Color("#0f172a"))
+
+	styleLogMarker = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#6366f1")).
+			Bold(true)
+
+	styleScrollTrack = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#475569"))
+
+	styleScrollThumb = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#cbd5e1"))
+
 	styleSearchPrompt = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#94a3b8")).
 				Bold(true)
@@ -29,11 +52,13 @@ var (
 	styleSearchInput = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#f8fafc"))
 
-	// Status bar at the bottom.
 	styleStatusBar = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#94a3b8")).
 			Faint(true)
+
+	styleSectionHeader = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#94a3b8"))
 )
 
-// spinnerFrames cycles through these for StateStarting.
 var spinnerFrames = []string{"◐", "◓", "◑", "◒"}

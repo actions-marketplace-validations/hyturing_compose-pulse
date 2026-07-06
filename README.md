@@ -17,9 +17,19 @@ A real-time terminal UI that visualizes your Docker Compose startup sequence as 
      └─ ● rabbitmq
 ```
 
-Press `Enter` on any node to inspect its logs. Press `/` to filter by regex.
+Press `Enter` on any service for full-screen logs. The dashboard shows a live log preview in the right panel.
 
 ---
+
+## Interface
+
+cpulse uses a **lazydocker-style split dashboard**:
+
+- **Left panel `[1] Services`** — compose dependency trees grouped by project, plus standalone containers
+- **Right panel `[2] Details`** — selected service metadata and a live tail of the last ~15 log lines
+- **Enter** — open full-screen log view (entire terminal)
+- **q / Esc** (in log view) — return to the dashboard
+- **Mouse wheel** — scroll logs in full-screen view
 
 ## The Problem
 
@@ -63,19 +73,17 @@ make build
 
 ## Usage
 
-Run `cpulse` from the same directory as your `docker-compose.yml`:
+Run `cpulse` anywhere — it auto-discovers all containers on your local Docker daemon:
 
 ```sh
 cpulse
 ```
 
-Or point to a specific file:
+Compose-managed containers appear as dependency trees grouped by project (`COMPOSE · projectname`). All other containers appear in a flat **OTHER CONTAINERS** section below.
 
-```sh
-cpulse --file path/to/docker-compose.yml
-```
+New stacks and containers appear automatically — no restart needed. Service status reflects `depends_on` conditions (`service_healthy`, `service_started`).
 
-`cpulse` reads your compose file, builds the dependency graph, and starts watching the Docker daemon. Bring up your stack in another terminal as usual:
+Bring up stacks in other terminals as usual:
 
 ```sh
 docker compose up
@@ -85,21 +93,33 @@ docker compose up
 
 | Flag | Default | Description |
 |---|---|---|
-| `--file` | auto-detect | Path to the compose file |
 | `--version` | — | Print version and exit |
 
 ---
 
 ## Keyboard Shortcuts
 
+### Dashboard
+
 | Key | Action |
 |---|---|
 | `j` / `↓` | Move cursor down |
 | `k` / `↑` | Move cursor up |
-| `Enter` | Open / close log modal for selected service |
-| `/` | Filter logs by regex |
-| `Esc` | Close search bar / close modal |
+| `Enter` | Open full-screen logs for selected service |
 | `q` / `Ctrl+C` | Quit |
+
+### Full-screen logs
+
+| Key | Action |
+|---|---|
+| `q` / `Esc` | Back to dashboard |
+| `↑`/`↓` or `k`/`j` or mouse wheel | Scroll logs |
+| `PgUp`/`PgDn` or `Ctrl+U`/`Ctrl+D` | Page scroll |
+| `Home` | Jump to top; press again to load older logs |
+| `g` / `End` | Jump to bottom and resume follow |
+| `l` | Load older logs |
+| `/` | Filter logs by regex |
+| `Ctrl+C` | Quit |
 
 ---
 
@@ -110,7 +130,7 @@ docker compose up
 | `●` | Green | Running and healthy |
 | `◐` | Yellow | Starting / health check running |
 | `●` | Red | Health check failed / unhealthy |
-| `○` | Gray | Waiting on a dependency |
+| `○` | Gray | Waiting on a dependency or not yet started |
 | `✕` | Red | Exited with error |
 
 ---
@@ -118,7 +138,6 @@ docker compose up
 ## Requirements
 
 - Docker Desktop or Docker Engine running locally
-- A `docker-compose.yml` using v3+ syntax with `depends_on` and/or `healthcheck` blocks
 - macOS or Linux
 
 ---

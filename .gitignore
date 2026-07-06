@@ -9,11 +9,9 @@ dist/
 coverage.html
 coverage.txt
 
-# Plans (internal, not for the repo)
-plans/
-
 # AI tool configs (personal/local — not for the repo)
 .claude/
+.cursor/
 .cursorrules
 .codex
 .windsurfrules
@@ -23,6 +21,8 @@ plans/
 .continue/
 .copilot/
 Claude.md
+plans/
+learn/
 
 # OS
 .DS_Store

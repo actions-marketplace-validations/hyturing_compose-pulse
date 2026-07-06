@@ -10,7 +10,7 @@ build: ## Build the binary to bin/cpulse
 	@mkdir -p bin
 	go build $(LDFLAGS) -o $(OUT) ./cmd/cpulse
 
-run: ## Run directly with go run (auto-detects docker-compose.yml in CWD)
+run: ## Run directly with go run (discovers all local Docker containers)
 	go run $(LDFLAGS) ./cmd/cpulse $(ARGS)
 
 test: ## Run all tests
