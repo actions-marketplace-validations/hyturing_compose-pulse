@@ -68,6 +68,10 @@ func FromContainers(containers []docker.ContainerInfo) (*Snapshot, error) {
 			if node, ok := graph.ByName[svc]; ok {
 				node.ContainerID = ctr.ID
 				node.State = ctr.State
+				node.ExitCode = ctr.ExitCode
+				node.Image = ctr.Image
+				node.Ports = ctr.Ports
+				node.CreatedAt = ctr.Created
 			}
 		}
 		projects = append(projects, Project{

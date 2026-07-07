@@ -53,10 +53,11 @@ func (m *Model) openActionMenu() {
 }
 
 func (m Model) selectedActionRow() (Row, bool) {
-	if m.cursor >= len(m.rows) || m.cursor < 0 {
+	visible := m.visibleRows()
+	if m.cursor >= len(visible) || m.cursor < 0 {
 		return Row{}, false
 	}
-	row := m.rows[m.cursor]
+	row := visible[m.cursor]
 	return row, row.Kind == RowComposeNode && row.Node != nil
 }
 
@@ -99,7 +100,7 @@ func (m *Model) selectAction() tea.Cmd {
 	if plan.Title == "Exec shell" && len(plan.Steps) > 0 {
 		m.actionMode = actionModeExec
 		m.execContainerID = plan.Steps[0].Service
-		m.execService = rowLabel(m.rows[m.cursor])
+		m.execService = rowLabel(m.visibleRows()[m.cursor])
 		m.execInput = ""
 		m.actionOutput = []string{"in-TUI exec started; type a command and press enter"}
 		m.actionErr = ""
@@ -213,7 +214,7 @@ func renderExecView(m Model, width int) string {
 
 func renderActionMenu(m Model, width int) string {
 	var b strings.Builder
-	b.WriteString(padMetaLine("Actions · "+rowLabel(m.rows[m.cursor]), width))
+	b.WriteString(padMetaLine("Actions · "+rowLabel(m.visibleRows()[m.cursor]), width))
 	b.WriteString("\n")
 	b.WriteString(padMetaLine(strings.Repeat("─", maxInt(8, width-scrollBarWidth-4)), width))
 	for i, item := range m.actionItems {

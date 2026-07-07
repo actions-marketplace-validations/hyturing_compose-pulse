@@ -99,6 +99,7 @@ func TestRenderPreview_LogViewport(t *testing.T) {
 		selectedSvc:    "api",
 		width:          100,
 		height:         30,
+		inspectorTab:   inspectorTabLogs,
 	}
 	out := renderPreview(m, 58)
 	if !strings.Contains(out, "▸") {

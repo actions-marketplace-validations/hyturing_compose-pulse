@@ -78,6 +78,10 @@ func (s *Snapshot) ApplyStatesFrom(other *Snapshot) {
 			if dstNode, ok := dst.Graph.ByName[name]; ok {
 				dstNode.ContainerID = srcNode.ContainerID
 				dstNode.State = srcNode.State
+				dstNode.ExitCode = srcNode.ExitCode
+				dstNode.Image = srcNode.Image
+				dstNode.Ports = srcNode.Ports
+				dstNode.CreatedAt = srcNode.CreatedAt
 			}
 		}
 	}

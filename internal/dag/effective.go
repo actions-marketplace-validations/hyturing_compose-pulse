@@ -30,7 +30,7 @@ func dependencySatisfied(dep *Node, condition string) bool {
 	case "service_healthy":
 		return dep.State == docker.StateHealthy
 	case "service_completed_successfully":
-		return dep.State == docker.StateExited
+		return dep.State == docker.StateExited && dep.ExitCode != nil && *dep.ExitCode == 0
 	default:
 		if dep.ContainerID == "" {
 			return false

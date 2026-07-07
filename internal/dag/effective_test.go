@@ -92,6 +92,33 @@ func TestEffectiveState_NotStartedYet(t *testing.T) {
 	}
 }
 
+func TestEffectiveState_ExitedDependencyDoesNotSatisfyServiceStarted(t *testing.T) {
+	cfg := &compose.Config{
+		Services: map[string]compose.Service{
+			"migrate": {},
+			"api": {
+				DependsOn: compose.DependsOn{
+					"migrate": {Condition: "service_started"},
+				},
+			},
+		},
+	}
+	g, err := Build(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.ByName["migrate"].ContainerID = "m1"
+	g.ByName["migrate"].State = docker.StateExited
+
+	state, waiting := EffectiveState(g.ByName["api"], g)
+	if state != docker.StatePending {
+		t.Errorf("expected pending, got %v", state)
+	}
+	if len(waiting) != 1 || waiting[0] != "migrate" {
+		t.Errorf("expected waiting on migrate, got %v", waiting)
+	}
+}
+
 func TestEffectiveState_DiamondDeps(t *testing.T) {
 	cfg := &compose.Config{
 		Services: map[string]compose.Service{

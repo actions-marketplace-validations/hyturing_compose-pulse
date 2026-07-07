@@ -100,7 +100,7 @@ func buildWaitingContent(m Model) string {
 
 func (m Model) logContentHeight() int {
 	h := m.height - 2
-	if m.searching || (!m.logWaiting && m.filter != "") {
+	if m.searching || (!m.logWaiting && m.logFilter != "") {
 		h--
 	}
 	if h < 1 {
@@ -153,7 +153,7 @@ func (m Model) displayLogLines() []string {
 	if m.logWaiting {
 		return strings.Split(buildWaitingContent(m), "\n")
 	}
-	return filterLines(m.logs, m.filter)
+	return filterLines(m.logs, m.logFilter)
 }
 
 func logTitleSuffix(m Model) string {
@@ -283,12 +283,12 @@ func (m *Model) applyLogMore(msg logMoreMsg) {
 		return
 	}
 	wrapW := m.logViewportWidth() - scrollBarWidth - logLinePrefixW
-	before := buildLogDisplayRows(filterLines(m.logs, m.filter), wrapW)
+	before := buildLogDisplayRows(filterLines(m.logs, m.logFilter), wrapW)
 	m.logs = merged
 	if len(m.logs) > logMaxLines {
 		m.logs = m.logs[len(m.logs)-logMaxLines:]
 	}
-	after := buildLogDisplayRows(filterLines(m.logs, m.filter), wrapW)
+	after := buildLogDisplayRows(filterLines(m.logs, m.logFilter), wrapW)
 	addedDisplay := len(after) - len(before)
 	_ = added
 	m.logCursor += addedDisplay
@@ -355,11 +355,11 @@ func renderLogFullscreen(m Model) string {
 	if !m.logWaiting {
 		if m.searching {
 			searchBar = styleLogFooter.Width(width).Render(
-				" " + styleSearchPrompt.Render("/") + styleSearchInput.Render(m.filter+"█"),
+				" " + styleSearchPrompt.Render("/") + styleSearchInput.Render(m.logFilter+"█"),
 			)
-		} else if m.filter != "" {
+		} else if m.logFilter != "" {
 			searchBar = styleLogFooter.Width(width).Render(
-				" " + styleSearchPrompt.Render("filter: ") + styleSearchInput.Render(m.filter),
+				" " + styleSearchPrompt.Render("filter: ") + styleSearchInput.Render(m.logFilter),
 			)
 		}
 	}

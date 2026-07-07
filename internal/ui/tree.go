@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/hyturing/compose-pulse/internal/dag"
 	"github.com/hyturing/compose-pulse/internal/docker"
@@ -14,56 +14,130 @@ func isSelectable(row Row) bool {
 	return row.Kind == RowComposeNode || row.Kind == RowStandalone
 }
 
-func formatComposeLine(row Row, spinFrame int) string {
+// formatComposeLine renders one compose-service row: glyph, column-aligned
+// name, state label, and a short hint (exit code / blocker / dep count).
+func formatComposeLine(row Row, spinFrame, nameCol int) string {
 	n := row.Node
-	eff, waitingOn := dag.EffectiveState(n, row.Graph)
-	indicator := stateIndicator(eff, spinFrame)
+	display, waitingOn := dag.Display(n, row.Graph)
+	indicator := displayIndicator(display, spinFrame)
 	name := styleName.Render(n.Name)
-	stateTxt := formatEffectiveStateLabel(eff, waitingOn, n)
 
-	var extraDeps string
-	if len(n.Deps) > 1 {
-		extraDeps = styleDim.Render(" also←" + strings.Join(n.Deps[1:], ","))
+	prefixW := runewidth.StringWidth(stripANSI(row.linePrefix))
+	nameW := runewidth.StringWidth(n.Name)
+	padW := nameCol - prefixW
+	if padW < nameW+1 {
+		padW = nameW + 1
 	}
+	paddedName := name + strings.Repeat(" ", padW-nameW)
 
-	return fmt.Sprintf("%s%s %s %s%s", row.linePrefix, indicator, name, stateTxt, extraDeps)
+	segments := []string{
+		row.linePrefix + indicator + " " + paddedName,
+		styleDim.Render(displayStateLabel(display)),
+	}
+	if hint := displayHint(display, waitingOn, n); hint != "" {
+		segments = append(segments, styleDim.Render(hint))
+	}
+	return strings.Join(segments, "  ")
 }
 
-func formatEffectiveStateLabel(eff docker.ContainerState, waitingOn []string, n *dag.Node) string {
-	if eff == docker.StatePending {
-		if len(waitingOn) > 0 {
-			parts := make([]string, len(waitingOn))
-			for i, w := range waitingOn {
-				cond := n.DepConditions[w]
-				if cond == "" {
-					cond = "service_started"
-				}
-				if cond == "service_healthy" {
-					parts[i] = w + ":healthy"
-				} else {
-					parts[i] = w
-				}
-			}
-			return styleDim.Render("(pending ← " + strings.Join(parts, ", ") + ")")
+// nameColumn computes the shared name column width for a set of rows: the
+// widest visible (prefix + name) combination, capped at half the panel width.
+func nameColumn(rows []Row, panelWidth int) int {
+	maxLen := 0
+	for _, r := range rows {
+		if r.Kind != RowComposeNode {
+			continue
 		}
-		return styleDim.Render("(not started)")
+		w := runewidth.StringWidth(stripANSI(r.linePrefix)) + runewidth.StringWidth(r.Node.Name)
+		if w > maxLen {
+			maxLen = w
+		}
 	}
-	return styleDim.Render("(" + n.State.String() + ")")
+	half := panelWidth / 2
+	if maxLen > half {
+		maxLen = half
+	}
+	if maxLen < 1 {
+		maxLen = 1
+	}
+	return maxLen
 }
 
+func displayStateLabel(d dag.DisplayState) string {
+	if d == dag.DisplayPending {
+		return "not started"
+	}
+	return string(d)
+}
+
+func displayHint(d dag.DisplayState, waitingOn []string, n *dag.Node) string {
+	switch d {
+	case dag.DisplayFailed:
+		if n.ExitCode != nil {
+			return fmt.Sprintf("exit %d", *n.ExitCode)
+		}
+		return "exit ?"
+	case dag.DisplayCompleted:
+		return "exit 0"
+	case dag.DisplayBlocked:
+		if len(waitingOn) == 0 {
+			return ""
+		}
+		first := waitingOn[0]
+		label := first
+		if n.DepConditions[first] == "service_healthy" {
+			label = first + ":healthy"
+		}
+		if extra := len(waitingOn) - 1; extra > 0 {
+			label += fmt.Sprintf(" +%d", extra)
+		}
+		return label
+	case dag.DisplayHealthy:
+		if len(n.Deps) > 0 {
+			return fmt.Sprintf("+%d deps", len(n.Deps))
+		}
+		return ""
+	default:
+		return ""
+	}
+}
+
+// displayIndicator renders the glyph for a derived DisplayState.
+func displayIndicator(d dag.DisplayState, frame int) string {
+	switch d {
+	case dag.DisplayHealthy:
+		return glyphHealthy
+	case dag.DisplayStarting:
+		return glyphStartingFrames[frame%len(glyphStartingFrames)]
+	case dag.DisplayUnhealthy:
+		return glyphUnhealthy
+	case dag.DisplayCompleted:
+		return glyphCompleted
+	case dag.DisplayFailed:
+		return glyphFailed
+	case dag.DisplayDegraded:
+		return glyphDegraded
+	case dag.DisplayBlocked, dag.DisplayPending:
+		return glyphPending
+	default:
+		return "?"
+	}
+}
+
+// stateIndicator renders the glyph for a raw container state — used for
+// standalone containers, which have no DAG and thus no DisplayState.
 func stateIndicator(s docker.ContainerState, frame int) string {
 	switch s {
 	case docker.StateHealthy:
-		return lipgloss.NewStyle().Foreground(colorHealthy).Render("●")
+		return glyphHealthy
 	case docker.StateStarting:
-		spinner := spinnerFrames[frame%len(spinnerFrames)]
-		return lipgloss.NewStyle().Foreground(colorStarting).Render(spinner)
+		return glyphStartingFrames[frame%len(glyphStartingFrames)]
 	case docker.StateUnhealthy:
-		return lipgloss.NewStyle().Foreground(colorUnhealthy).Render("●")
+		return glyphUnhealthy
 	case docker.StatePending:
-		return lipgloss.NewStyle().Foreground(colorPending).Render("○")
+		return glyphPending
 	case docker.StateExited:
-		return lipgloss.NewStyle().Foreground(colorUnhealthy).Render("✕")
+		return glyphFailed
 	default:
 		return "?"
 	}

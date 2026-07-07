@@ -1,0 +1,60 @@
+# Demo stack for manually exercising every cpulse DisplayState at once.
+#
+# Usage:
+#   docker compose -f testdata/demo-broken/docker-compose.yml up -d
+#   make run
+#
+# Expect to see: redis healthy, db-migrate completed (exit 0), postgres
+# unhealthy (bad healthcheck on purpose), api blocked on postgres:healthy,
+# worker blocked transitively via api, crasher failed (exit 1).
+#
+# Manual checks against this stack (Phase 1 Definition of Done):
+#   - summary bar shows live counts + "updated Ns ago"
+#   - glyphs: ✓ db-migrate, ✕ crasher, ○ api "blocked postgres:healthy"
+#   - f/b filters isolate failed / blocked services and preserve cursor
+#   - inspector tabs 1/2/3 (Overview/Logs/Deps) all render for every state
+#   - ? opens/closes the help overlay
+#
+# Teardown:
+#   docker compose -f testdata/demo-broken/docker-compose.yml down -v
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+
+  db-migrate: # -> completed (exit 0)
+    image: alpine:3
+    command: ["sh", "-c", "echo migrating && sleep 2"]
+
+  postgres: # -> unhealthy (healthcheck fails on purpose)
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: secret
+    healthcheck:
+      test: ["CMD", "false"]
+      interval: 2s
+      timeout: 2s
+      retries: 3
+
+  api: # -> blocked by postgres:healthy
+    image: alpine:3
+    command: ["sleep", "infinity"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+
+  worker: # -> blocked by api (transitively by postgres)
+    image: alpine:3
+    command: ["sleep", "infinity"]
+    depends_on:
+      - api
+
+  crasher: # -> failed (exit 1)
+    image: alpine:3
+    command: ["sh", "-c", "echo boom >&2 && exit 1"]

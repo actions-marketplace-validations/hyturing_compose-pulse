@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-runewidth"
@@ -30,8 +31,8 @@ func TestDashboardLayout_Split(t *testing.T) {
 	if right != 60 {
 		t.Errorf("rightW = %d, want 60", right)
 	}
-	if panelH != 29 {
-		t.Errorf("panelH = %d, want 29", panelH)
+	if panelH != 28 {
+		t.Errorf("panelH = %d, want 28", panelH)
 	}
 }
 
@@ -58,37 +59,49 @@ func TestRenderDashboard(t *testing.T) {
 	graph.ByName["api"].ContainerID = "c1"
 	graph.ByName["api"].State = docker.StateHealthy
 
-	rows := BuildRows(&discover.Snapshot{
+	snap := &discover.Snapshot{
 		Projects: []discover.Project{{Name: "app", Graph: graph}},
-	})
+	}
+	rows := BuildRows(snap)
 	m := Model{
-		rows:   rows,
-		cursor: firstSelectable(rows),
-		width:  100,
-		height: 30,
+		snapshot: snap,
+		rows:     rows,
+		cursor:   firstSelectable(rows),
+		width:    100,
+		height:   30,
+		lastPoll: time.Now(),
 	}
 	out := renderDashboard(m)
-	if !strings.Contains(out, "[1] Services") {
+	if !strings.Contains(out, "Services") {
 		t.Error("expected services panel title")
 	}
-	if !strings.Contains(out, "[2] Details") {
-		t.Error("expected details panel title")
+	if !strings.Contains(out, "api · healthy") {
+		t.Error("expected inspector title with selected service name and state")
 	}
-	if !strings.Contains(out, "enter: fullscreen") {
+	if !strings.Contains(out, "1 Overview") || !strings.Contains(out, "2 Logs") || !strings.Contains(out, "3 Deps") {
+		t.Error("expected inspector tab strip")
+	}
+	if !strings.Contains(out, "enter logs") {
 		t.Error("expected status bar hint")
 	}
-	if !strings.Contains(out, "a: actions") {
+	if !strings.Contains(out, "a actions") {
 		t.Error("expected action menu hint")
+	}
+	if !strings.Contains(out, "? help") {
+		t.Error("expected help hint")
 	}
 	if !strings.Contains(out, "tab/←→") {
 		t.Error("expected tab and side-key panel switching hint")
+	}
+	if !strings.Contains(out, "app") || !strings.Contains(out, "1 services") || !strings.Contains(out, "updated") {
+		t.Errorf("expected summary bar with project/service counts, got:\n%s", out)
 	}
 	for i, line := range strings.Split(out, "\n") {
 		plain := stripANSI(line)
 		if w := runewidth.StringWidth(plain); w > m.width {
 			t.Fatalf("line %d width = %d, want <= %d: %q", i, w, m.width, plain)
 		}
-		if i < m.height-1 && !hasRightPanelEdge(plain) {
+		if i > 0 && i < m.height-1 && !hasRightPanelEdge(plain) {
 			t.Fatalf("panel line %d missing right border: %q", i, plain)
 		}
 	}
@@ -668,7 +681,7 @@ func TestEffectiveState_InRender(t *testing.T) {
 		Projects: []discover.Project{{Name: "app", Graph: graph}},
 	})
 	out := renderView(rows, firstSelectable(rows), 0, 80)
-	if !strings.Contains(out, "pending") {
-		t.Error("expected pending label for blocked app service")
+	if !strings.Contains(out, "blocked") {
+		t.Error("expected blocked label for app service waiting on db:healthy")
 	}
 }

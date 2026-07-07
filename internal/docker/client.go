@@ -3,11 +3,29 @@ package docker
 import (
 	"context"
 	"io"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
 	dockerclient "github.com/docker/docker/client"
 )
+
+var exitCodeRe = regexp.MustCompile(`^Exited \((\d+)\)`)
+
+// parseExitCode extracts the exit code from a Docker status string like
+// "Exited (137) 2 hours ago". Returns nil when the container is not exited.
+func parseExitCode(status string) *int {
+	m := exitCodeRe.FindStringSubmatch(status)
+	if m == nil {
+		return nil
+	}
+	code, err := strconv.Atoi(m[1])
+	if err != nil {
+		return nil
+	}
+	return &code
+}
 
 // dockerAPI is the subset of the Docker SDK used by Client (mockable in tests).
 type dockerAPI interface {

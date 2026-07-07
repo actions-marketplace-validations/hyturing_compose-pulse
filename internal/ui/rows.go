@@ -3,6 +3,17 @@ package ui
 import (
 	"github.com/hyturing/compose-pulse/internal/dag"
 	"github.com/hyturing/compose-pulse/internal/discover"
+	"github.com/hyturing/compose-pulse/internal/docker"
+)
+
+// rowFilter narrows the visible row set to a state subset.
+type rowFilter int
+
+// The set of row filters selectable from the dashboard.
+const (
+	filterAll     rowFilter = iota
+	filterFailed            // DisplayFailed + DisplayUnhealthy
+	filterBlocked           // DisplayBlocked
 )
 
 // RowKind identifies a navigable or decorative row in the view.
@@ -135,6 +146,71 @@ func clampCursor(cur int, rows []Row) int {
 		return cur
 	}
 	return firstSelectable(rows)
+}
+
+// filterRows returns rows matching f. Project headers are kept only when at
+// least one of their child rows matches. Tree line prefixes are flattened to
+// two spaces in filtered views (the filtered list is not a tree).
+func filterRows(rows []Row, f rowFilter) []Row {
+	if f == filterAll {
+		return rows
+	}
+
+	var out []Row
+	var pendingHeader Row
+	hasPendingHeader := false
+	headerEmitted := false
+
+	for _, r := range rows {
+		switch r.Kind {
+		case RowProjectHeader, RowStandaloneHeader:
+			pendingHeader = r
+			hasPendingHeader = true
+			headerEmitted = false
+			continue
+		}
+		if !rowMatchesFilter(r, f) {
+			continue
+		}
+		if hasPendingHeader && !headerEmitted {
+			out = append(out, pendingHeader)
+			headerEmitted = true
+		}
+		flat := r
+		flat.linePrefix = "  "
+		out = append(out, flat)
+	}
+	return out
+}
+
+// emptyFilterMessage is shown in the left panel when a filter matches nothing.
+func emptyFilterMessage(f rowFilter) string {
+	switch f {
+	case filterFailed:
+		return "No failed services 🎉"
+	case filterBlocked:
+		return "No blocked services 🎉"
+	default:
+		return "No containers found."
+	}
+}
+
+func rowMatchesFilter(r Row, f rowFilter) bool {
+	switch r.Kind {
+	case RowComposeNode:
+		state, _ := dag.Display(r.Node, r.Graph)
+		switch f {
+		case filterFailed:
+			return state == dag.DisplayFailed || state == dag.DisplayUnhealthy
+		case filterBlocked:
+			return state == dag.DisplayBlocked
+		}
+	case RowStandalone:
+		if f == filterFailed {
+			return r.Standalone.State == docker.StateExited
+		}
+	}
+	return false
 }
 
 func rowLabel(r Row) string {
