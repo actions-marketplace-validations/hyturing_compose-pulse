@@ -49,6 +49,7 @@ release:
 
 brews:
   - name: cpulse
+    directory: Formula
     repository:
       owner: hyturing
       name: homebrew-cpulse
