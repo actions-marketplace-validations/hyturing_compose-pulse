@@ -82,10 +82,10 @@ func TestRenderDashboard_TabSeparatedLogLines(t *testing.T) {
 		if w > m.width {
 			t.Fatalf("line %d width = %d, want <= %d: %q", i, w, m.width, plain)
 		}
-		if i < len(lines)-1 && w < m.width {
+		if i > 0 && i < len(lines)-1 && w < m.width {
 			t.Fatalf("line %d width = %d, want %d (panel join misalignment): %q", i, w, m.width, plain)
 		}
-		if i < len(lines)-1 && !hasRightPanelEdge(plain) {
+		if i > 0 && i < len(lines)-1 && !hasRightPanelEdge(plain) {
 			t.Fatalf("panel line %d missing right border at width %d: %q", i, w, plain)
 		}
 	}

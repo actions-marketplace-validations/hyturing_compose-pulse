@@ -12,4 +12,10 @@ type Node struct {
 	State         docker.ContainerState
 	Level         int    // render depth: root = 0
 	ContainerID   string // Docker container ID (empty when pending / not yet running)
+
+	// Runtime metadata copied from ContainerInfo each poll:
+	ExitCode  *int
+	Image     string
+	Ports     []string
+	CreatedAt int64 // unix seconds; 0 when no container exists yet
 }

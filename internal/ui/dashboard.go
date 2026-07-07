@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"time"
 )
 
 func renderDashboard(m Model) string {
@@ -17,15 +18,21 @@ func renderDashboard(m Model) string {
 	leftW, rightW, panelH, compact := dashboardLayout(width, height)
 	innerH := panelInnerHeight(panelH)
 
-	graphContent := renderGraphContent(m.rows, m.cursor, m.graphScroll, m.spinFrame, leftW-2, innerH-1)
-	leftPanel := renderPanel("[1] Services", graphContent, leftW, panelH, m.panelFocus == focusGraph, false)
+	visibleRows := m.visibleRows()
+	var graphContent string
+	if len(visibleRows) == 0 && m.rowFilter != filterAll {
+		graphContent = styleDim.Render(emptyFilterMessage(m.rowFilter))
+	} else {
+		graphContent = renderGraphContent(visibleRows, m.cursor, m.graphScroll, m.spinFrame, leftW-2, innerH-1)
+	}
+	leftPanel := renderPanel(leftPanelTitle(m), graphContent, leftW, panelH, m.panelFocus == focusGraph, false)
 
 	var panels string
 	if compact {
 		panels = leftPanel
 	} else {
 		previewContent := renderPreview(m, rightW-2)
-		rightPanel := renderPanel("[2] Details", previewContent, rightW, panelH, m.panelFocus == focusPreview, true)
+		rightPanel := renderPanel(inspectorTitle(m), previewContent, rightW, panelH, m.panelFocus == focusPreview, true)
 		panelLines := panelRenderedHeight(leftPanel)
 		if h := panelRenderedHeight(rightPanel); h > panelLines {
 			panelLines = h
@@ -33,18 +40,26 @@ func renderDashboard(m Model) string {
 		panels = joinPanelsHorizontal(leftPanel, rightPanel, panelLines)
 	}
 
-	statusText := " tab/←→: switch panel   ↑↓: navigate   a: actions   enter: fullscreen   q: quit"
+	var sinceUpdate time.Duration
+	if !m.lastPoll.IsZero() {
+		sinceUpdate = time.Since(m.lastPoll)
+	}
+	summary := renderSummaryBar(countStates(m.snapshot), projectLabel(m.snapshot), sinceUpdate, width)
+
+	statusText := " ↑↓ move   tab/←→ switch panel   enter logs   1-3 tabs   f failed   b blocked   a actions   ? help   q quit"
 	if m.panelFocus == focusPreview {
-		statusText = " tab/←→: switch panel   ↑↓/wheel: scroll logs   g: follow   a: actions   enter: fullscreen   q: quit"
+		statusText = " ↑↓/wheel scroll   tab/←→ switch panel   g follow   a actions   ? help   q quit"
 	}
 	status := renderStatusBar(width, statusText)
-	return panels + "\n" + status
+	return summary + "\n" + panels + "\n" + status
 }
 
 func renderGraphContent(rows []Row, cursor, scroll, spinFrame, width, maxLines int) string {
 	if len(rows) == 0 {
 		return styleDim.Render("No containers found.")
 	}
+
+	nameCol := nameColumn(rows, width)
 
 	var lines []string
 	for i, row := range rows {
@@ -53,7 +68,7 @@ func renderGraphContent(rows []Row, cursor, scroll, spinFrame, width, maxLines i
 		case RowProjectHeader, RowStandaloneHeader:
 			line = styleSectionHeader.Render(row.Label)
 		case RowComposeNode:
-			line = formatComposeLine(row, spinFrame)
+			line = formatComposeLine(row, spinFrame, nameCol)
 		case RowStandalone:
 			line = formatStandaloneLine(row, stateIndicator(row.Standalone.State, spinFrame))
 		}
@@ -80,7 +95,8 @@ func renderGraphContent(rows []Row, cursor, scroll, spinFrame, width, maxLines i
 }
 
 func (m *Model) clampGraphScroll() {
-	if len(m.rows) == 0 {
+	visibleCount := len(m.visibleRows())
+	if visibleCount == 0 {
 		m.graphScroll = 0
 		return
 	}
@@ -100,7 +116,7 @@ func (m *Model) clampGraphScroll() {
 	if m.graphScroll < 0 {
 		m.graphScroll = 0
 	}
-	maxScroll := len(m.rows) - maxLines
+	maxScroll := visibleCount - maxLines
 	if maxScroll < 0 {
 		maxScroll = 0
 	}

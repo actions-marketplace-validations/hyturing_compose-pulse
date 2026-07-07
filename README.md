@@ -5,39 +5,29 @@
 [![GitHub release](https://img.shields.io/github/v/release/hyturing/compose-pulse)](https://github.com/hyturing/compose-pulse/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A real-time terminal UI that visualizes your Docker Compose startup sequence as an interactive dependency tree — so you can see exactly which service is blocking everything else.
+**cpulse shows why your Docker Compose stack is stuck.** A terminal UI that watches every container in real time, renders the `depends_on` graph as a tree, and tells you in plain language what's healthy, what failed, and what's blocked on what.
 
-```
-  ● api-gateway
-  ├─ ● auth-service
-  │  └─ ● postgres
-  ├─ ◐ payment-service        ← still starting
-  │  └─ ● redis
-  └─ ✕ worker                 ← exited with error
-     └─ ● rabbitmq
-```
+![cpulse dashboard demo](docs/demo.gif)
 
-Press `Enter` on any service for full-screen logs. The dashboard shows a live log preview in the right panel.
+## The problem
 
----
+`docker compose up` dumps interleaved logs from every container into one stream. When something won't start, you're left guessing which service is the actual blocker, scrolling through thousands of log lines, and jumping between terminal tabs. cpulse turns that graph into something you can just look at.
 
-## Interface
+## What it shows you
 
-cpulse uses a **lazydocker-style split dashboard**:
+Every service gets one of these states, derived from its container state, exit code, and dependency graph — not just raw Docker status:
 
-- **Left panel `[1] Services`** — compose dependency trees grouped by project, plus standalone containers
-- **Right panel `[2] Details`** — selected service metadata and a live tail of the last ~15 log lines
-- **Enter** — open full-screen log view (entire terminal)
-- **q / Esc** (in log view) — return to the dashboard
-- **Mouse wheel** — scroll logs in full-screen view
+| Glyph | State | Meaning |
+|---|---|---|
+| `●` green | `healthy` | Running, healthcheck passing (or none defined) |
+| `◐` yellow (spinning) | `starting` | Container exists, healthcheck in its start period |
+| `○` gray | `blocked` | Waiting on a `depends_on` condition that isn't satisfied yet |
+| `○` gray | `pending` | Not blocked, just doesn't have a container yet |
+| `✓` green | `completed` | Exited `0` — a migration/init job that did its job |
+| `✕` red | `failed` | Exited non-zero, or exited with no known code |
+| `●` red | `unhealthy` | Running, but the healthcheck is failing |
 
-## The Problem
-
-`docker compose up` dumps interleaved logs from every container into one stream. When a service fails, you stop everything, scroll through thousands of lines, open multiple terminal tabs, and lose 10 minutes hunting the root cause.
-
-**cpulse** makes the dependency graph visual and live — healthy services stay green, failing ones turn red immediately, and their logs are one keypress away.
-
----
+An init container that finishes with `exit 0` looks nothing like one that crashed — that distinction alone used to require reading logs by hand.
 
 ## Installation
 
@@ -65,7 +55,7 @@ sudo mv cpulse /usr/local/bin/
 
 ### Build from source
 
-Requires Go 1.22+.
+Requires Go 1.25+.
 
 ```sh
 git clone https://github.com/hyturing/compose-pulse.git
@@ -74,19 +64,15 @@ make build
 # binary at ./bin/cpulse
 ```
 
----
-
 ## Usage
 
-Run `cpulse` anywhere — it auto-discovers all containers on your local Docker daemon:
+Run `cpulse` anywhere — it auto-discovers every container on your local Docker daemon:
 
 ```sh
 cpulse
 ```
 
-Compose-managed containers appear as dependency trees grouped by project (`COMPOSE · projectname`). All other containers appear in a flat **OTHER CONTAINERS** section below.
-
-New stacks and containers appear automatically — no restart needed. Service status reflects `depends_on` conditions (`service_healthy`, `service_started`).
+Compose-managed containers appear as dependency trees grouped by project (`COMPOSE · projectname`). Everything else shows up in a flat **OTHER CONTAINERS** section below. New stacks and containers appear automatically — no restart needed.
 
 Bring up stacks in other terminals as usual:
 
@@ -100,17 +86,30 @@ docker compose up
 |---|---|---|
 | `--version` | — | Print version and exit |
 
----
+## Interface
 
-## Keyboard Shortcuts
+- **Top bar** — project name, a live count of services per state, and how long ago the last poll landed.
+- **Services panel** (left) — the dependency tree. Each row shows a state glyph, the service name, its state label, and a short hint (`exit 1`, `postgres:healthy`, `+2 deps`).
+- **Inspector panel** (right) — the selected service, in three tabs:
+  - **Overview** — status, exit code, image, ports, how long ago it was created, what it's blocked by (if anything), and its last few log lines.
+  - **Logs** — the full live log stream, filterable and scrollable; press `Enter` to go full-screen.
+  - **Deps** — what it's waiting on and why, its full dependency list with satisfied/unsatisfied state, and its direct dependents.
+
+## Keyboard shortcuts
 
 ### Dashboard
 
 | Key | Action |
 |---|---|
-| `j` / `↓` | Move cursor down |
-| `k` / `↑` | Move cursor up |
-| `Enter` | Open full-screen logs for selected service |
+| `↑`/`k`, `↓`/`j` | Move selection |
+| `Tab`, `←`/`→` | Switch between Services and Inspector panels |
+| `Enter` | Open full-screen logs for the selected service |
+| `1` / `2` / `3` | Inspector tab: Overview / Logs / Deps |
+| `f` | Toggle a filter showing only failed + unhealthy services |
+| `b` | Toggle a filter showing only blocked services |
+| `Esc` | Clear the active filter |
+| `a` | Open the actions menu (restart, rebuild, exec) for the selected service |
+| `?` | Toggle the help overlay |
 | `q` / `Ctrl+C` | Quit |
 
 ### Full-screen logs
@@ -118,43 +117,22 @@ docker compose up
 | Key | Action |
 |---|---|
 | `q` / `Esc` | Back to dashboard |
-| `↑`/`↓` or `k`/`j` or mouse wheel | Scroll logs |
-| `PgUp`/`PgDn` or `Ctrl+U`/`Ctrl+D` | Page scroll |
+| `↑`/`↓`, `k`/`j`, mouse wheel | Scroll |
+| `PgUp`/`PgDn`, `Ctrl+U`/`Ctrl+D` | Page scroll |
 | `Home` | Jump to top; press again to load older logs |
-| `g` / `End` | Jump to bottom and resume follow |
+| `g` / `End` | Jump to bottom and resume following |
 | `l` | Load older logs |
 | `/` | Filter logs by regex |
 | `Ctrl+C` | Quit |
 
----
+### Actions menu (`a`)
 
-## Status Indicators
-
-| Symbol | Color | Meaning |
-|---|---|---|
-| `●` | Green | Running and healthy |
-| `◐` | Yellow | Starting / health check running |
-| `●` | Red | Health check failed / unhealthy |
-| `○` | Gray | Waiting on a dependency or not yet started |
-| `✕` | Red | Exited with error |
-
----
+Restart or rebuild the selected service, cascade a restart to everything that depends on it, or drop into an in-TUI exec shell — without leaving cpulse or touching another terminal.
 
 ## Requirements
 
 - Docker Desktop or Docker Engine running locally
 - macOS or Linux
-
----
-
-## Roadmap
-
-- **v0.2** — Switch from polling to `docker events` streaming (lower latency)
-- **v0.3** — Full `jq`-style log filtering via `gojq`
-- **v0.4** — Real graph canvas with box-drawing edges
-- **v0.5** — Container lifecycle actions (restart, stop)
-
----
 
 ## Contributing
 

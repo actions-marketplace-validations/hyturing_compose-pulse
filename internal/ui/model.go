@@ -18,6 +18,7 @@ type viewMode int
 const (
 	viewDashboard viewMode = iota
 	viewLogFullscreen
+	viewHelp
 )
 
 type panelFocus int
@@ -34,6 +35,12 @@ func firstSelectable(rows []Row) int {
 		}
 	}
 	return 0
+}
+
+// visibleRows returns the rows currently navigable/rendered: m.rows filtered
+// by m.rowFilter. m.rows itself stays the unfiltered master list.
+func (m Model) visibleRows() []Row {
+	return filterRows(m.rows, m.rowFilter)
 }
 
 func nextSelectable(rows []Row, cur, delta int) int {
@@ -78,9 +85,12 @@ type Model struct {
 	logCh            <-chan docker.LogLineMsg
 	logCancel        context.CancelFunc
 	searching        bool
-	filter           string
+	logFilter        string
 	spinFrame        int
 	width, height    int
+	lastPoll         time.Time
+	inspectorTab     int
+	rowFilter        rowFilter
 
 	actionMode      actionMode
 	actionItems     []actionMenuItem
@@ -109,6 +119,7 @@ func New(snap *discover.Snapshot, dc *docker.Client) Model {
 		pollCh:    dc.StartPollCh(ctx),
 		cancel:    cancel,
 		logFollow: true,
+		lastPoll:  time.Now(),
 	}
 	return m
 }
@@ -148,6 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tickCmd()
 
 	case docker.PollMsg:
+		m.lastPoll = time.Now()
 		rebuilt, _ := m.applySnapshot(msg.Containers)
 		cmds := []tea.Cmd{waitForPoll(m.pollCh)}
 		if rebuilt {
@@ -250,10 +262,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.searching {
 			return m.updateSearch(msg)
 		}
-		if m.viewMode == viewLogFullscreen {
+		switch m.viewMode {
+		case viewLogFullscreen:
 			return m.updateLogView(msg)
+		case viewHelp:
+			return m.updateHelp(msg)
+		default:
+			return m.updateDashboard(msg)
 		}
-		return m.updateDashboard(msg)
 	}
 
 	return m, nil
@@ -265,31 +281,39 @@ func (m *Model) applySnapshot(containers []docker.ContainerInfo) (rebuilt bool, 
 		return false, err
 	}
 
+	visible := m.visibleRows()
 	prevKey := ""
-	if m.cursor < len(m.rows) {
-		prevKey = rowKey(m.rows[m.cursor])
+	if m.cursor < len(visible) {
+		prevKey = rowKey(visible[m.cursor])
 	}
 
 	if m.snapshot != nil && m.snapshot.SameStructure(newSnap) {
 		m.snapshot.ApplyStatesFrom(newSnap)
+		m.relocateCursor(prevKey)
 		m.clampGraphScroll()
 		return false, nil
 	}
 
 	m.snapshot = newSnap
 	m.rows = BuildRows(newSnap)
-
-	if prevKey != "" {
-		if idx := findRowByKey(m.rows, prevKey); idx >= 0 {
-			m.cursor = idx
-		} else {
-			m.cursor = clampCursor(m.cursor, m.rows)
-		}
-	} else {
-		m.cursor = firstSelectable(m.rows)
-	}
+	m.relocateCursor(prevKey)
 	m.clampGraphScroll()
 	return true, nil
+}
+
+// relocateCursor re-locates the cursor by rowKey within the current visible
+// (filtered) row set, falling back to the first selectable row.
+func (m *Model) relocateCursor(prevKey string) {
+	visible := m.visibleRows()
+	if prevKey != "" {
+		if idx := findRowByKey(visible, prevKey); idx >= 0 {
+			m.cursor = idx
+		} else {
+			m.cursor = clampCursor(m.cursor, visible)
+		}
+	} else {
+		m.cursor = firstSelectable(visible)
+	}
 }
 
 func (m *Model) selectedContainerID() string {
@@ -320,10 +344,11 @@ func (m *Model) beginLogStream(containerID string) tea.Cmd {
 }
 
 func (m *Model) syncSelectionStream() tea.Cmd {
-	if m.cursor >= len(m.rows) || !isSelectable(m.rows[m.cursor]) {
+	visible := m.visibleRows()
+	if m.cursor >= len(visible) || !isSelectable(visible[m.cursor]) {
 		return nil
 	}
-	row := m.rows[m.cursor]
+	row := visible[m.cursor]
 	key := rowKey(row)
 	if key == m.selectedRowKey && (m.logCh != nil || m.logWaiting) {
 		return nil
@@ -332,13 +357,14 @@ func (m *Model) syncSelectionStream() tea.Cmd {
 	m.selectedRowKey = key
 	m.selectedSvc = rowLabel(row)
 	m.panelFocus = focusGraph
+	m.inspectorTab = inspectorTabOverview
 	m.logs = nil
 	m.logScroll = 0
 	m.logCursor = 0
 	m.logFollow = true
 	m.logNoMoreHistory = false
 	m.logLoading = false
-	m.filter = ""
+	m.logFilter = ""
 	m.stopLogStream()
 
 	if row.ContainerID != "" {
@@ -351,10 +377,34 @@ func (m *Model) syncSelectionStream() tea.Cmd {
 	return nil
 }
 
+// setRowFilter switches the active row filter, preserving the current
+// selection by rowKey when possible.
+func (m *Model) setRowFilter(f rowFilter) {
+	if m.rowFilter == f {
+		return
+	}
+	visible := m.visibleRows()
+	prevKey := ""
+	if m.cursor < len(visible) {
+		prevKey = rowKey(visible[m.cursor])
+	}
+	m.rowFilter = f
+	m.relocateCursor(prevKey)
+	m.clampGraphScroll()
+}
+
+// toggleFilter switches to f, or back to filterAll if f is already active.
+func toggleFilter(cur, f rowFilter) rowFilter {
+	if cur == f {
+		return filterAll
+	}
+	return f
+}
+
 func (m *Model) closeLogView() {
 	m.viewMode = viewDashboard
 	m.searching = false
-	m.filter = ""
+	m.logFilter = ""
 	m.logFollow = false
 }
 
@@ -398,6 +448,36 @@ func (m Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.Action):
 		m.openActionMenu()
 
+	case m.actionMode == actionModeNone && key.Matches(msg, keys.Tab1):
+		m.inspectorTab = inspectorTabOverview
+		return m, nil
+
+	case m.actionMode == actionModeNone && key.Matches(msg, keys.Tab2):
+		m.inspectorTab = inspectorTabLogs
+		return m, nil
+
+	case m.actionMode == actionModeNone && key.Matches(msg, keys.Tab3):
+		if visible := m.visibleRows(); m.cursor < len(visible) && visible[m.cursor].Kind == RowComposeNode {
+			m.inspectorTab = inspectorTabDeps
+		}
+		return m, nil
+
+	case m.actionMode == actionModeNone && key.Matches(msg, keys.FilterFailed):
+		m.setRowFilter(toggleFilter(m.rowFilter, filterFailed))
+		return m, nil
+
+	case m.actionMode == actionModeNone && key.Matches(msg, keys.FilterBlocked):
+		m.setRowFilter(toggleFilter(m.rowFilter, filterBlocked))
+		return m, nil
+
+	case m.actionMode == actionModeNone && msg.Type == tea.KeyEsc:
+		m.setRowFilter(filterAll)
+		return m, nil
+
+	case m.actionMode == actionModeNone && key.Matches(msg, keys.Help):
+		m.viewMode = viewHelp
+		return m, nil
+
 	case key.Matches(msg, keys.Tab):
 		if !compact {
 			if m.panelFocus == focusGraph {
@@ -438,7 +518,7 @@ func (m Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.scrollLogLine(1)
 			return m, nil
 		}
-		m.cursor = nextSelectable(m.rows, m.cursor, 1)
+		m.cursor = nextSelectable(m.visibleRows(), m.cursor, 1)
 		m.clampGraphScroll()
 		return m, m.syncSelectionStream()
 
@@ -447,12 +527,12 @@ func (m Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.scrollLogLine(-1)
 			return m, nil
 		}
-		m.cursor = nextSelectable(m.rows, m.cursor, -1)
+		m.cursor = nextSelectable(m.visibleRows(), m.cursor, -1)
 		m.clampGraphScroll()
 		return m, m.syncSelectionStream()
 
 	case key.Matches(msg, keys.Enter):
-		if m.cursor < len(m.rows) && isSelectable(m.rows[m.cursor]) {
+		if visible := m.visibleRows(); m.cursor < len(visible) && isSelectable(visible[m.cursor]) {
 			m.viewMode = viewLogFullscreen
 			m.logFollow = true
 			m.logScroll = 0
@@ -510,21 +590,33 @@ func (m Model) updateLogView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case msg.Type == tea.KeyEsc:
+		m.viewMode = viewDashboard
+	case key.Matches(msg, keys.Help):
+		m.viewMode = viewDashboard
+	case msg.Type == tea.KeyRunes && string(msg.Runes) == "q":
+		m.viewMode = viewDashboard
+	}
+	return m, nil
+}
+
 func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEsc:
 		m.searching = false
-		m.filter = ""
+		m.logFilter = ""
 	case tea.KeyEnter:
 		m.searching = false
 		m.clampLogCursor()
 	case tea.KeyBackspace:
-		if len(m.filter) > 0 {
-			m.filter = m.filter[:len(m.filter)-1]
+		if len(m.logFilter) > 0 {
+			m.logFilter = m.logFilter[:len(m.logFilter)-1]
 		}
 	default:
 		if msg.Type == tea.KeyRunes {
-			m.filter += string(msg.Runes)
+			m.logFilter += string(msg.Runes)
 		}
 	}
 	return m, nil
@@ -532,8 +624,12 @@ func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // View renders the current model state to a string for display.
 func (m Model) View() string {
-	if m.viewMode == viewLogFullscreen {
+	switch m.viewMode {
+	case viewLogFullscreen:
 		return renderLogFullscreen(m)
+	case viewHelp:
+		return renderHelp(m)
+	default:
+		return renderDashboard(m)
 	}
-	return renderDashboard(m)
 }
