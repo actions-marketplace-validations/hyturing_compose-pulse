@@ -98,6 +98,30 @@ func PlanRebuildAndRestartDependents(project Project, graph *dag.Graph, service 
 	}
 }
 
+// PlanStopSelected builds a plan to stop one Compose service.
+func PlanStopSelected(project Project, service string) Plan {
+	return Plan{
+		Title: "Stop " + service,
+		Steps: []Step{{
+			Service: service,
+			Label:   "stop " + service,
+			Command: composeCommand(project, "stop", service),
+		}},
+	}
+}
+
+// PlanStartSelected builds a plan to start one previously-stopped Compose service.
+func PlanStartSelected(project Project, service string) Plan {
+	return Plan{
+		Title: "Start " + service,
+		Steps: []Step{{
+			Service: service,
+			Label:   "start " + service,
+			Command: composeCommand(project, "start", service),
+		}},
+	}
+}
+
 // PlanExecShell builds a plan to open a shell in a running container.
 func PlanExecShell(containerID string) Plan {
 	return Plan{
@@ -137,31 +161,5 @@ func composeCommand(project Project, args ...string) Command {
 }
 
 func downstreamServices(graph *dag.Graph, service string) []string {
-	if graph == nil {
-		return nil
-	}
-	start, ok := graph.ByName[service]
-	if !ok || start == nil {
-		return nil
-	}
-	seen := map[string]bool{service: true}
-	var visit func(*dag.Node)
-	visit = func(node *dag.Node) {
-		for _, child := range node.Children {
-			if child == nil || seen[child.Name] {
-				continue
-			}
-			seen[child.Name] = true
-			visit(child)
-		}
-	}
-	visit(start)
-
-	var out []string
-	for _, node := range graph.Ordered {
-		if node != nil && node.Name != service && seen[node.Name] {
-			out = append(out, node.Name)
-		}
-	}
-	return out
+	return dag.AllDependents(graph, service)
 }

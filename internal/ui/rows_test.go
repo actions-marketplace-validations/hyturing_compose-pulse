@@ -75,7 +75,7 @@ func TestFilterRows_FailedKeepsHeaderAndMatches(t *testing.T) {
 
 func TestFilterRows_DropsHeaderWithNoMatches(t *testing.T) {
 	rows := BuildRows(filterFixtureSnapshot(t))
-	out := filterRows(rows, filterBlocked)
+	out := filterRows(rows, filterWaiting)
 
 	for _, r := range out {
 		if r.Kind == RowStandaloneHeader {
@@ -93,6 +93,44 @@ func TestFilterRows_DropsHeaderWithNoMatches(t *testing.T) {
 	}
 }
 
+func TestBuildRows_SpacerBetweenProjects(t *testing.T) {
+	cfg := &compose.Config{Services: map[string]compose.Service{"a": {}}}
+	g1, err := dag.Build(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g2, err := dag.Build(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := BuildRows(&discover.Snapshot{
+		Projects: []discover.Project{
+			{Name: "one", Graph: g1},
+			{Name: "two", Graph: g2},
+		},
+	})
+	var sawFirst, sawSpacer, sawSecond bool
+	for _, r := range rows {
+		switch {
+		case r.Kind == RowProjectHeader && r.ProjectName == "one":
+			sawFirst = true
+		case r.Kind == RowSpacer && sawFirst && !sawSecond:
+			sawSpacer = true
+		case r.Kind == RowProjectHeader && r.ProjectName == "two":
+			sawSecond = true
+			if !sawSpacer {
+				t.Fatal("expected blank spacer before second project")
+			}
+		}
+	}
+	if !sawFirst || !sawSecond {
+		t.Fatalf("missing project headers in %#v", rows)
+	}
+	if isSelectable(Row{Kind: RowSpacer}) {
+		t.Fatal("spacer rows must not be selectable")
+	}
+}
+
 func TestFilterRows_EmptyResult(t *testing.T) {
 	cfg := &compose.Config{Services: map[string]compose.Service{"web": {}}}
 	graph, err := dag.Build(cfg)
@@ -106,8 +144,10 @@ func TestFilterRows_EmptyResult(t *testing.T) {
 	})
 
 	out := filterRows(rows, filterFailed)
-	if len(out) != 0 {
-		t.Fatalf("expected empty result, got %d rows", len(out))
+	// Project row is always kept under a filter (TUI-DESIGN.md §3.1); no
+	// matching services means only that summary row remains.
+	if len(out) != 1 || out[0].Kind != RowProjectHeader {
+		t.Fatalf("expected only project header, got %#v", out)
 	}
 }
 
@@ -154,7 +194,7 @@ func TestSetRowFilter_ClearRestoresFullList(t *testing.T) {
 	}
 }
 
-func TestUpdateDashboard_FilterKeysToggleAndClear(t *testing.T) {
+func TestUpdateDashboard_FilterCyclesAllFailedWaitingAll(t *testing.T) {
 	m := actionTestModel(t)
 
 	updated, _ := m.Update(keyMsg("f"))
@@ -163,19 +203,20 @@ func TestUpdateDashboard_FilterKeysToggleAndClear(t *testing.T) {
 		t.Fatalf("rowFilter = %v, want filterFailed", m.rowFilter)
 	}
 
-	// Pressing f again toggles back to all.
+	updated, _ = m.Update(keyMsg("f"))
+	m = updated.(Model)
+	if m.rowFilter != filterWaiting {
+		t.Fatalf("rowFilter = %v, want filterWaiting", m.rowFilter)
+	}
+
 	updated, _ = m.Update(keyMsg("f"))
 	m = updated.(Model)
 	if m.rowFilter != filterAll {
-		t.Fatalf("rowFilter = %v, want filterAll after second f", m.rowFilter)
+		t.Fatalf("rowFilter = %v, want filterAll after third f", m.rowFilter)
 	}
 
-	updated, _ = m.Update(keyMsg("b"))
+	updated, _ = m.Update(keyMsg("f"))
 	m = updated.(Model)
-	if m.rowFilter != filterBlocked {
-		t.Fatalf("rowFilter = %v, want filterBlocked", m.rowFilter)
-	}
-
 	updated, _ = m.Update(keyMsg("esc"))
 	m = updated.(Model)
 	if m.rowFilter != filterAll {

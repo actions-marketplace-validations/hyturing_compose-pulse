@@ -14,7 +14,7 @@ func TestHelpOverlay_OpenAndClose(t *testing.T) {
 		t.Fatalf("viewMode = %v, want viewHelp", m.viewMode)
 	}
 	out := m.View()
-	if !strings.Contains(out, "Navigation") || !strings.Contains(out, "Filters") {
+	if !strings.Contains(out, "Navigation") || !strings.Contains(out, "Service list") {
 		t.Errorf("expected help groups rendered, got:\n%s", out)
 	}
 

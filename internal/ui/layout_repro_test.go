@@ -62,19 +62,12 @@ func TestRenderDashboard_TabSeparatedLogLines(t *testing.T) {
 		selectedSvc:    "worker",
 		logs:           logs,
 		logFollow:      true,
-		panelFocus:     focusPreview,
+		panelFocus:     focusMain,
 		width:          120,
 		height:         35,
 	}
 	out := renderDashboard(m)
 	lines := strings.Split(out, "\n")
-
-	leftW, rightW, panelH, _ := dashboardLayout(m.width, m.height)
-	leftPanel := renderPanel("[1] Services", renderGraphContent(m.rows, m.cursor, m.graphScroll, m.spinFrame, leftW-2, panelInnerHeight(panelH)-1), leftW, panelH, m.panelFocus == focusGraph, false)
-	rightPanel := renderPanel("[2] Details", renderPreview(m, rightW-2), rightW, panelH, m.panelFocus == focusPreview, true)
-	if lh, rh := panelRenderedHeight(leftPanel), panelRenderedHeight(rightPanel); lh != rh {
-		t.Fatalf("panel height mismatch: left=%d right=%d", lh, rh)
-	}
 
 	for i, line := range lines {
 		plain := stripANSI(line)
@@ -144,8 +137,8 @@ func TestWrapToWidth_TabsDoNotBreakPanelWidth(t *testing.T) {
 
 func TestPanelRenderedHeight_MatchesSplit(t *testing.T) {
 	leftW, rightW, panelH, _ := dashboardLayout(120, 35)
-	left := renderPanel("[1] Services", strings.Repeat("x\n", panelH), leftW, panelH, true, false)
-	right := renderPanel("[2] Details", strings.Repeat("y\n", panelH), rightW, panelH, true, true)
+	left := renderPanel("Services", strings.Repeat("x\n", panelH), leftW, panelH, true, false)
+	right := renderPanel("Details", strings.Repeat("y\n", panelH), rightW, panelH, true, true)
 	lh := panelRenderedHeight(left)
 	rh := panelRenderedHeight(right)
 	t.Logf("left lines=%d right lines=%d panelH=%d", lh, rh, panelH)

@@ -1,10 +1,16 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"time"
+
+	"github.com/hyturing/compose-pulse/internal/dag"
 )
 
+// renderDashboard renders the dashboard shell: one left dependency-graph
+// panel (all compose projects, each with its pstree) plus one main panel on
+// the right, wrapped in a summary bar and status bar.
 func renderDashboard(m Model) string {
 	width := m.width
 	if width < 1 {
@@ -15,29 +21,38 @@ func renderDashboard(m Model) string {
 		height = 24
 	}
 
-	leftW, rightW, panelH, compact := dashboardLayout(width, height)
-	innerH := panelInnerHeight(panelH)
+	leftW, mainW, panelH, compact := dashboardLayout(width, height)
 
-	visibleRows := m.visibleRows()
+	visible := m.visibleRows()
+	innerH := panelInnerHeight(panelH)
+	innerW := leftW - 2
+	cols := computeGraphColumns(visible, innerW)
 	var graphContent string
-	if len(visibleRows) == 0 && m.rowFilter != filterAll {
+	if len(visible) == 0 && m.rowFilter != filterAll {
 		graphContent = styleDim.Render(emptyFilterMessage(m.rowFilter))
 	} else {
-		graphContent = renderGraphContent(visibleRows, m.cursor, m.graphScroll, m.spinFrame, leftW-2, innerH-1)
+		graphContent = renderGraphContent(m, visible, m.cursor, m.graphScroll, innerW, innerH)
 	}
-	leftPanel := renderPanel(leftPanelTitle(m), graphContent, leftW, panelH, m.panelFocus == focusGraph, false)
+	leftPanel := renderPanel(
+		formatGraphColumnHeader(cols, m.rowFilter),
+		graphContent,
+		leftW, panelH,
+		m.panelFocus == focusLeft,
+		false,
+	)
 
 	var panels string
 	if compact {
 		panels = leftPanel
 	} else {
-		previewContent := renderPreview(m, rightW-2)
-		rightPanel := renderPanel(inspectorTitle(m), previewContent, rightW, panelH, m.panelFocus == focusPreview, true)
-		panelLines := panelRenderedHeight(leftPanel)
-		if h := panelRenderedHeight(rightPanel); h > panelLines {
-			panelLines = h
+		var mainContent string
+		if m.actionMode != actionModeNone {
+			mainContent = renderActionView(m, mainW-2)
+		} else {
+			mainContent = renderMainPanel(m, mainW-2)
 		}
-		panels = joinPanelsHorizontal(leftPanel, rightPanel, panelLines)
+		mainPanel := renderPanel(mainPanelTitle(m), mainContent, mainW, panelH, m.panelFocus == focusMain, true)
+		panels = joinPanelsHorizontal(leftPanel, mainPanel, panelH)
 	}
 
 	var sinceUpdate time.Duration
@@ -46,36 +61,41 @@ func renderDashboard(m Model) string {
 	}
 	summary := renderSummaryBar(countStates(m.snapshot), projectLabel(m.snapshot), sinceUpdate, width)
 
-	statusText := " ↑↓ move   tab/←→ switch panel   enter logs   1-3 tabs   f failed   b blocked   a actions   ? help   q quit"
-	if m.panelFocus == focusPreview {
-		statusText = " ↑↓/wheel scroll   tab/←→ switch panel   g follow   a actions   ? help   q quit"
-	}
-	status := renderStatusBar(width, statusText)
+	status := renderStatusBar(width, formatStatusHints(width, statusHintContext(m)))
 	return summary + "\n" + panels + "\n" + status
 }
 
-func renderGraphContent(rows []Row, cursor, scroll, spinFrame, width, maxLines int) string {
+// renderGraphContent renders the left panel body: every compose project
+// header followed by its pstree dependency graph. cursor/scroll index into rows.
+func renderGraphContent(m Model, rows []Row, cursor, scroll, width, maxLines int) string {
 	if len(rows) == 0 {
 		return styleDim.Render("No containers found.")
 	}
 
-	nameCol := nameColumn(rows, width)
+	cols := computeGraphColumns(rows, width)
 
 	var lines []string
 	for i, row := range rows {
 		var line string
 		switch row.Kind {
-		case RowProjectHeader, RowStandaloneHeader:
-			line = styleSectionHeader.Render(row.Label)
+		case RowProjectHeader:
+			line = formatProjectHeader(row, m.spinFrame, cols)
+		case RowStandaloneHeader:
+			line = formatStandaloneHeader(row.Label, cols)
 		case RowComposeNode:
-			line = formatComposeLine(row, spinFrame, nameCol)
+			line = formatComposeLine(m, row, cols)
 		case RowStandalone:
-			line = formatStandaloneLine(row, stateIndicator(row.Standalone.State, spinFrame))
+			line = formatStandaloneLine(m, row, cols)
+		case RowSpacer:
+			line = ""
 		}
 		if i == cursor && isSelectable(row) {
-			line = styleSelected.Render(padLine(truncateToVisibleWidth(line, width), width))
+			// Strip nested cell colors first — lipgloss Background does not
+			// reliably paint across existing ANSI segments, which left a
+			// one-cell cursor blob instead of a full-row highlight.
+			line = styleSelected.Width(width).Render(padPlain(stripANSI(line), width))
 		} else {
-			line = truncateToVisibleWidth(line, width)
+			line = padVisible(line, width)
 		}
 		lines = append(lines, line)
 	}
@@ -90,22 +110,23 @@ func renderGraphContent(rows []Row, cursor, scroll, spinFrame, width, maxLines i
 	if end > len(lines) {
 		end = len(lines)
 	}
-	visible := lines[scroll:end]
-	return strings.Join(visible, "\n")
+	return strings.Join(lines[scroll:end], "\n")
 }
 
+// clampGraphScroll keeps the left-panel scroll positioned so the cursor
+// row stays on screen.
 func (m *Model) clampGraphScroll() {
-	visibleCount := len(m.visibleRows())
+	visible := m.visibleRows()
+	visibleCount := len(visible)
 	if visibleCount == 0 {
 		m.graphScroll = 0
 		return
 	}
-	leftW, _, panelH, _ := dashboardLayout(m.width, m.height)
-	maxLines := panelInnerHeight(panelH) - 1
+	_, _, panelH, _ := dashboardLayout(m.width, m.height)
+	maxLines := panelInnerHeight(panelH)
 	if maxLines < 1 {
 		maxLines = 1
 	}
-	_ = leftW
 
 	if m.cursor < m.graphScroll {
 		m.graphScroll = m.cursor
@@ -123,4 +144,102 @@ func (m *Model) clampGraphScroll() {
 	if m.graphScroll > maxScroll {
 		m.graphScroll = maxScroll
 	}
+}
+
+// formatProjectHeader renders a compose project section row on the grid:
+// name only — counts live in the right-panel summary under the title.
+func formatProjectHeader(row Row, spinFrame int, cols graphColumns) string {
+	_ = spinFrame
+	nameCell := padVisible(
+		styleSectionHeader.Render("▸ ")+styleProjectName.Render(row.ProjectName),
+		cols.nameW,
+	)
+	stateCell := padVisible("", cols.stateW)
+	detailCell := padVisible("", cols.detailW)
+	if !cols.showStats {
+		return joinGraphRow(nameCell, stateCell, detailCell, "", "")
+	}
+	return joinGraphRow(
+		nameCell, stateCell, detailCell,
+		padVisible("", graphCPUColWidth),
+		padVisible("", graphMEMColWidth),
+	)
+}
+
+// formatStandaloneHeader spans the full row width so the section title is not
+// clipped to the SERVICE column.
+func formatStandaloneHeader(label string, cols graphColumns) string {
+	return padVisible(styleSectionHeader.Render(label), cols.totalWidth())
+}
+
+// totalWidth is the exact visible width of a rendered graph row for these columns.
+func (c graphColumns) totalWidth() int {
+	w := c.nameW + graphColGap + c.stateW + graphColGap + c.detailW
+	if c.showStats {
+		w += graphColGap + graphStatsWidth()
+	}
+	return w
+}
+
+// formatProjectSummaryLine is the right-panel summary under the title:
+// "6 services  ✕1 fail  ┄1 wait  …"
+func formatProjectSummaryLine(g *dag.Graph, spinFrame, width int) string {
+	n := 0
+	if g != nil {
+		n = len(g.Ordered)
+	}
+	line := styleDim.Render(fmt.Sprintf("%d services", n))
+	if parts := projectSummaryParts(g, spinFrame); len(parts) > 0 {
+		line += "  " + strings.Join(parts, "  ")
+	}
+	return padMetaLine(line, width)
+}
+
+// projectSummaryParts renders nonzero state-count buckets for a project
+// in a compact form (glyph + count + short word).
+func projectSummaryParts(g *dag.Graph, spinFrame int) []string {
+	if g == nil {
+		return nil
+	}
+	var up, starting, waiting, failed, unhealthy, completed, pending int
+	for _, n := range g.Ordered {
+		state, _ := dag.Display(n, g)
+		switch state {
+		case dag.DisplayHealthy:
+			up++
+		case dag.DisplayStarting:
+			starting++
+		case dag.DisplayBlocked:
+			waiting++
+		case dag.DisplayFailed:
+			failed++
+		case dag.DisplayUnhealthy:
+			unhealthy++
+		case dag.DisplayCompleted:
+			completed++
+		case dag.DisplayPending:
+			pending++
+		}
+	}
+
+	var parts []string
+	add := func(count int, glyph, word string) {
+		if count > 0 {
+			parts = append(parts, fmt.Sprintf("%s%d %s", glyph, count, word))
+		}
+	}
+	add(failed, glyphFailed, "fail")
+	add(unhealthy, glyphUnhealthy, "sick")
+	add(waiting, glyphPending, "wait")
+	add(starting, glyphStartingFrames[spinFrame%len(glyphStartingFrames)], "run")
+	add(up, glyphHealthy, "up")
+	add(completed, glyphCompleted, "done")
+	add(pending, glyphPending, "pend")
+	return parts
+}
+
+// renderView renders a flat graph, used by pure render tests.
+func renderView(rows []Row, cursor, spinFrame, width int) string {
+	m := Model{spinFrame: spinFrame}
+	return renderGraphContent(m, rows, cursor, 0, width, len(rows)+1)
 }

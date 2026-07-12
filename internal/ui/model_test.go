@@ -25,11 +25,12 @@ func TestDashboardLayout_Split(t *testing.T) {
 	if compact {
 		t.Fatal("expected split layout at 100x30")
 	}
-	if left != 40 {
-		t.Errorf("leftW = %d, want 40", left)
+	// 45% → 45, minLeft 58; main gets 42.
+	if left != 58 {
+		t.Errorf("leftW = %d, want 58", left)
 	}
-	if right != 60 {
-		t.Errorf("rightW = %d, want 60", right)
+	if right != 42 {
+		t.Errorf("rightW = %d, want 42", right)
 	}
 	if panelH != 28 {
 		t.Errorf("panelH = %d, want 28", panelH)
@@ -63,35 +64,51 @@ func TestRenderDashboard(t *testing.T) {
 		Projects: []discover.Project{{Name: "app", Graph: graph}},
 	}
 	rows := BuildRows(snap)
+	idx := findRowByKey(rows, "compose:app:api")
+	if idx < 0 {
+		t.Fatal("api row not found")
+	}
 	m := Model{
 		snapshot: snap,
 		rows:     rows,
-		cursor:   firstSelectable(rows),
+		cursor:   idx,
 		width:    100,
 		height:   30,
 		lastPoll: time.Now(),
 	}
 	out := renderDashboard(m)
-	if !strings.Contains(out, "Services") {
-		t.Error("expected services panel title")
+	if !strings.Contains(out, "STATUS") || !strings.Contains(out, "DETAIL") {
+		t.Error("expected column headers in left panel title")
+	}
+	if strings.Contains(out, "Dependency graph") {
+		t.Error("did not expect Dependency graph title")
+	}
+	if !strings.Contains(out, "app") {
+		t.Error("expected compose project name in left panel")
+	}
+	if !strings.Contains(out, "services") {
+		t.Error("expected project summary in right panel")
 	}
 	if !strings.Contains(out, "api · healthy") {
-		t.Error("expected inspector title with selected service name and state")
+		t.Error("expected main panel title with selected service name and state")
 	}
-	if !strings.Contains(out, "1 Overview") || !strings.Contains(out, "2 Logs") || !strings.Contains(out, "3 Deps") {
-		t.Error("expected inspector tab strip")
+	if !strings.Contains(out, "1 logs") || !strings.Contains(out, "2 stats") || !strings.Contains(out, "3 deps") {
+		t.Errorf("expected service tab strip, got:\n%s", stripANSI(out))
 	}
-	if !strings.Contains(out, "enter logs") {
-		t.Error("expected status bar hint")
+	if !strings.Contains(out, "enter zoom") {
+		t.Error("expected status bar zoom hint")
 	}
-	if !strings.Contains(out, "a actions") {
-		t.Error("expected action menu hint")
+	if !strings.Contains(out, "esc back") {
+		t.Error("expected esc back hint in status bar")
 	}
-	if !strings.Contains(out, "? help") {
-		t.Error("expected help hint")
+	if !strings.Contains(out, "f filter") {
+		t.Error("expected f filter hint in status bar")
 	}
 	if !strings.Contains(out, "tab/←→") {
 		t.Error("expected tab and side-key panel switching hint")
+	}
+	if !strings.Contains(out, "logs/stats/deps/health") {
+		t.Error("expected named service tab hints in status bar")
 	}
 	if !strings.Contains(out, "app") || !strings.Contains(out, "1 services") || !strings.Contains(out, "updated") {
 		t.Errorf("expected summary bar with project/service counts, got:\n%s", out)
@@ -112,51 +129,56 @@ func TestDashboardPanelFocus_LeftRightKeys(t *testing.T) {
 
 	updated, _ := m.Update(keyMsg("right"))
 	m = updated.(Model)
-	if m.panelFocus != focusPreview {
+	if m.panelFocus != focusMain {
 		t.Fatalf("panelFocus after right = %v, want preview", m.panelFocus)
 	}
 
 	updated, _ = m.Update(keyMsg("left"))
 	m = updated.(Model)
-	if m.panelFocus != focusGraph {
+	if m.panelFocus != focusLeft {
 		t.Fatalf("panelFocus after left = %v, want graph", m.panelFocus)
 	}
 }
 
 func TestRenderGraphContent_SelectedRowFullWidth(t *testing.T) {
 	row := Row{
-		Kind: RowComposeNode,
-		Node: &dag.Node{Name: "api", ContainerID: "c1", State: docker.StateHealthy},
+		Kind:       RowComposeNode,
+		Node:       &dag.Node{Name: "api", ContainerID: "c1", State: docker.StateHealthy},
+		linePrefix: "  ",
 	}
 
-	out := renderGraphContent([]Row{row}, 0, 0, 0, 40, 1)
+	m := Model{spinFrame: 0}
+	out := renderGraphContent(m, []Row{row}, 0, 0, 40, 1)
 	plain := stripANSI(out)
 	if w := runewidth.StringWidth(plain); w != 40 {
 		t.Fatalf("selected row width = %d, want 40: %q", w, plain)
+	}
+	if !strings.Contains(plain, "api") || !strings.Contains(plain, "healthy") {
+		t.Fatalf("expected full selected row content: %q", plain)
 	}
 }
 
 func TestActionMenu_OpenAndRender(t *testing.T) {
 	m := actionTestModel(t)
 
-	updated, _ := m.Update(keyMsg("a"))
+	updated, _ := m.Update(keyMsg("x"))
 	got := updated.(Model)
 
 	if got.actionMode != actionModeMenu {
 		t.Fatalf("actionMode = %v, want menu", got.actionMode)
 	}
-	out := renderPreview(got, 60)
+	out := renderActionView(got, 60)
 	if !strings.Contains(out, "Actions · api") {
 		t.Fatalf("expected action menu title, got:\n%s", out)
 	}
-	if !strings.Contains(out, "restart selected") {
+	if !strings.Contains(out, "restart") {
 		t.Fatalf("expected restart action, got:\n%s", out)
 	}
 }
 
 func TestActionMenu_DependentRestartRequiresConfirmation(t *testing.T) {
 	m := actionTestModel(t)
-	updated, _ := m.Update(keyMsg("a"))
+	updated, _ := m.Update(keyMsg("x"))
 	m = updated.(Model)
 
 	// Move from restart selected to restart dependents.
@@ -168,7 +190,7 @@ func TestActionMenu_DependentRestartRequiresConfirmation(t *testing.T) {
 	if m.actionMode != actionModeConfirm {
 		t.Fatalf("actionMode = %v, want confirm", m.actionMode)
 	}
-	out := renderPreview(m, 60)
+	out := renderActionView(m, 60)
 	if !strings.Contains(out, "Restart dependents") {
 		t.Fatalf("expected confirm view, got:\n%s", out)
 	}
@@ -187,7 +209,7 @@ func TestActionSelectedStartsRunnerImmediatelyAndShowsOutput(t *testing.T) {
 		return events
 	}
 
-	updated, _ := m.Update(keyMsg("a"))
+	updated, _ := m.Update(keyMsg("x"))
 	m = updated.(Model)
 	updated, cmd := m.Update(keyMsg("enter"))
 	m = updated.(Model)
@@ -221,7 +243,7 @@ func TestActionFailureStopsAndRendersError(t *testing.T) {
 		return events
 	}
 
-	updated, _ := m.Update(keyMsg("a"))
+	updated, _ := m.Update(keyMsg("x"))
 	m = updated.(Model)
 	updated, cmd := m.Update(keyMsg("enter"))
 	m = updated.(Model)
@@ -234,7 +256,7 @@ func TestActionFailureStopsAndRendersError(t *testing.T) {
 	if m.actionMode != actionModeDone {
 		t.Fatalf("actionMode = %v, want done", m.actionMode)
 	}
-	out := renderPreview(m, 60)
+	out := renderActionView(m, 60)
 	if !strings.Contains(out, "error: boom") {
 		t.Fatalf("expected rendered error, got:\n%s", out)
 	}
@@ -243,7 +265,7 @@ func TestActionFailureStopsAndRendersError(t *testing.T) {
 func TestActionMenu_EscapeCloses(t *testing.T) {
 	m := actionTestModel(t)
 
-	updated, _ := m.Update(keyMsg("a"))
+	updated, _ := m.Update(keyMsg("x"))
 	m = updated.(Model)
 	updated, _ = m.Update(keyMsg("esc"))
 	m = updated.(Model)
@@ -259,7 +281,7 @@ func TestExecActionOpensInTUIExecPrompt(t *testing.T) {
 	if m.actionMode != actionModeExec {
 		t.Fatalf("actionMode = %v, want exec", m.actionMode)
 	}
-	out := renderPreview(m, 60)
+	out := renderActionView(m, 60)
 	if !strings.Contains(out, "Exec · api") {
 		t.Fatalf("expected exec view title, got:\n%s", out)
 	}
@@ -384,11 +406,18 @@ func keyMsg(s string) tea.KeyMsg {
 func openExecAction(t *testing.T) Model {
 	t.Helper()
 	m := actionTestModel(t)
-	updated, _ := m.Update(keyMsg("a"))
+	updated, _ := m.Update(keyMsg("x"))
 	m = updated.(Model)
-	for range 4 {
-		updated, _ = m.Update(keyMsg("down"))
-		m = updated.(Model)
+	found := false
+	for i, item := range m.actionItems {
+		if item.Label == "exec shell" {
+			m.actionCursor = i
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("exec shell action not found")
 	}
 	updated, _ = m.Update(keyMsg("enter"))
 	return updated.(Model)
@@ -444,24 +473,25 @@ func TestRenderView_Snapshot(t *testing.T) {
 	rows := BuildRows(snap)
 	out := renderView(rows, firstSelectable(rows), 0, 80)
 
-	if !strings.Contains(out, "COMPOSE · myapp") {
-		t.Error("expected compose project header")
-	}
+	// Project headers and pstrees share the left panel (renderView).
 	if !strings.Contains(out, "OTHER CONTAINERS") {
 		t.Error("expected standalone section header")
 	}
 	if !strings.Contains(out, "stray") {
 		t.Error("expected standalone container name")
 	}
+	if !strings.Contains(out, "db") || !strings.Contains(out, "app") {
+		t.Error("expected compose services in tree")
+	}
 }
 
-func TestFirstSelectable_SkipsHeaders(t *testing.T) {
+func TestFirstSelectable_IncludesProjectHeader(t *testing.T) {
 	rows := []Row{
-		{Kind: RowProjectHeader, Label: "COMPOSE · app"},
+		{Kind: RowProjectHeader, Label: "COMPOSE · app", ProjectName: "app"},
 		{Kind: RowComposeNode, Node: &dag.Node{Name: "web"}},
 	}
-	if got := firstSelectable(rows); got != 1 {
-		t.Errorf("firstSelectable = %d, want 1", got)
+	if got := firstSelectable(rows); got != 0 {
+		t.Errorf("firstSelectable = %d, want 0 (project row is selectable)", got)
 	}
 }
 
@@ -683,5 +713,101 @@ func TestEffectiveState_InRender(t *testing.T) {
 	out := renderView(rows, firstSelectable(rows), 0, 80)
 	if !strings.Contains(out, "blocked") {
 		t.Error("expected blocked label for app service waiting on db:healthy")
+	}
+}
+
+// TestUpdateDashboard_JumpTimelineDirectlyFromService is a regression test:
+// jumping straight to 't' from a service selection must not let the
+// project<->service kind-change reset inside syncSelectionStream clobber the
+// requested tab back to 0 (doctor).
+func TestUpdateDashboard_JumpTimelineDirectlyFromService(t *testing.T) {
+	m := actionTestModel(t)
+	if m.selectionIsProject {
+		t.Fatal("fixture should start on a service selection")
+	}
+
+	updated, _ := m.Update(keyMsg("t"))
+	m = updated.(Model)
+	if !m.selectionIsProject {
+		t.Fatal("expected project row selected after 't'")
+	}
+	if m.mainTab != tabTimeline {
+		t.Fatalf("mainTab = %d, want tabTimeline (must survive the kind-change reset)", m.mainTab)
+	}
+}
+
+func TestUpdateDashboard_JumpDoctorAndTimeline(t *testing.T) {
+	m := actionTestModel(t)
+
+	updated, _ := m.Update(keyMsg("d"))
+	m = updated.(Model)
+	if !m.selectionIsProject || m.mainTab != tabDoctor {
+		t.Fatalf("expected project selected on doctor tab, got selectionIsProject=%v mainTab=%d", m.selectionIsProject, m.mainTab)
+	}
+
+	updated, _ = m.Update(keyMsg("t"))
+	m = updated.(Model)
+	if !m.selectionIsProject || m.mainTab != tabTimeline {
+		t.Fatalf("expected project selected on timeline tab, got selectionIsProject=%v mainTab=%d", m.selectionIsProject, m.mainTab)
+	}
+}
+
+func TestUpdateDashboard_MainTabNumberKeysAndBrackets(t *testing.T) {
+	m := actionTestModel(t)
+
+	updated, _ := m.Update(keyMsg("2"))
+	m = updated.(Model)
+	if m.mainTab != tabStats {
+		t.Fatalf("mainTab after '2' = %d, want tabStats", m.mainTab)
+	}
+
+	updated, _ = m.Update(keyMsg("4"))
+	m = updated.(Model)
+	if m.mainTab != tabHealth {
+		t.Fatalf("mainTab after '4' = %d, want tabHealth", m.mainTab)
+	}
+
+	updated, _ = m.Update(keyMsg("["))
+	m = updated.(Model)
+	if m.mainTab != tabDeps {
+		t.Fatalf("mainTab after '[' = %d, want tabDeps", m.mainTab)
+	}
+
+	updated, _ = m.Update(keyMsg("]"))
+	m = updated.(Model)
+	if m.mainTab != tabHealth {
+		t.Fatalf("mainTab after ']' = %d, want tabHealth", m.mainTab)
+	}
+	updated, _ = m.Update(keyMsg("]"))
+	m = updated.(Model)
+	if m.mainTab != tabLogs {
+		t.Fatalf("mainTab after wrap ']' = %d, want tabLogs", m.mainTab)
+	}
+}
+
+func TestUpdateDashboard_ProjectSelectionSwitchesToProjectTabs(t *testing.T) {
+	m := actionTestModel(t)
+	projectIdx := findRowByKey(m.rows, "project:app")
+	if projectIdx < 0 {
+		t.Fatal("expected project row")
+	}
+	m.cursor = projectIdx
+	m.syncSelectionStream()
+	if !m.selectionIsProject {
+		t.Fatal("expected selectionIsProject after selecting project row")
+	}
+	if m.mainTab != tabDoctor {
+		t.Fatalf("mainTab = %d, want tabDoctor (reset on selection kind change)", m.mainTab)
+	}
+
+	updated, _ := m.Update(keyMsg("2"))
+	m = updated.(Model)
+	if m.mainTab != tabTimeline {
+		t.Fatalf("mainTab after '2' on project = %d, want tabTimeline", m.mainTab)
+	}
+	updated, _ = m.Update(keyMsg("3"))
+	m = updated.(Model)
+	if m.mainTab != tabGraph {
+		t.Fatalf("mainTab after '3' on project = %d, want tabGraph", m.mainTab)
 	}
 }

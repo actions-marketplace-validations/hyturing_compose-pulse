@@ -14,6 +14,7 @@ type Service struct {
 	Build       interface{}       `yaml:"build"`
 	DependsOn   DependsOn         `yaml:"depends_on"`
 	Healthcheck *Healthcheck      `yaml:"healthcheck"`
+	Restart     string            `yaml:"restart"`
 	Ports       []string          `yaml:"ports"`
 	Environment map[string]string `yaml:"environment"`
 }
@@ -54,10 +55,38 @@ type DependsOnCondition struct {
 	Condition string `yaml:"condition"`
 }
 
+// HealthcheckTest supports both string and list forms of healthcheck.test:
+//
+//	test: curl -f http://localhost/          → ["CMD-SHELL", "..."]
+//	test: ["CMD", "curl", "-f", "http://…"]
+type HealthcheckTest []string
+
+// UnmarshalYAML handles scalar (CMD-SHELL) and sequence forms of test.
+func (t *HealthcheckTest) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		var s string
+		if err := value.Decode(&s); err != nil {
+			return err
+		}
+		*t = HealthcheckTest{"CMD-SHELL", s}
+	case yaml.SequenceNode:
+		var xs []string
+		if err := value.Decode(&xs); err != nil {
+			return err
+		}
+		*t = HealthcheckTest(xs)
+	}
+	return nil
+}
+
 // Healthcheck mirrors the docker-compose healthcheck block.
 type Healthcheck struct {
-	Test     []string `yaml:"test"`
-	Interval string   `yaml:"interval"`
-	Timeout  string   `yaml:"timeout"`
-	Retries  int      `yaml:"retries"`
+	Test          HealthcheckTest `yaml:"test"`
+	Interval      string          `yaml:"interval"`
+	Timeout       string          `yaml:"timeout"`
+	StartPeriod   string          `yaml:"start_period"`
+	StartInterval string          `yaml:"start_interval"`
+	Retries       int             `yaml:"retries"`
+	Disable       bool            `yaml:"disable"`
 }

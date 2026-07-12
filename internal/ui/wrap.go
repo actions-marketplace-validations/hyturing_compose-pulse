@@ -30,7 +30,7 @@ func normalizeLogLine(s string) string {
 }
 
 // wrapToWidth breaks plain text into lines at most width cells wide, preferring
-// word boundaries like lazydocker log wrapping.
+// word boundaries and line wrapping.
 func wrapToWidth(s string, width int) []string {
 	s = normalizeLogLine(s)
 	if width < 1 {

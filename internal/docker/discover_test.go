@@ -2,9 +2,11 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 )
 
@@ -18,6 +20,26 @@ func (m *mockAPI) ContainerList(_ context.Context, _ container.ListOptions) ([]c
 
 func (m *mockAPI) ContainerLogs(_ context.Context, _ string, _ container.LogsOptions) (io.ReadCloser, error) {
 	return io.NopCloser(nil), nil
+}
+
+func (m *mockAPI) ContainerExecCreate(_ context.Context, _ string, _ container.ExecOptions) (container.ExecCreateResponse, error) {
+	return container.ExecCreateResponse{}, errors.New("not implemented")
+}
+
+func (m *mockAPI) ContainerExecAttach(_ context.Context, _ string, _ container.ExecAttachOptions) (types.HijackedResponse, error) {
+	return types.HijackedResponse{}, errors.New("not implemented")
+}
+
+func (m *mockAPI) ContainerExecInspect(_ context.Context, _ string) (container.ExecInspect, error) {
+	return container.ExecInspect{}, errors.New("not implemented")
+}
+
+func (m *mockAPI) ContainerInspect(_ context.Context, _ string) (container.InspectResponse, error) {
+	return container.InspectResponse{}, errors.New("not implemented")
+}
+
+func (m *mockAPI) ContainerStatsOneShot(_ context.Context, _ string) (container.StatsResponseReader, error) {
+	return container.StatsResponseReader{}, errors.New("not implemented")
 }
 
 func (m *mockAPI) Close() error { return nil }

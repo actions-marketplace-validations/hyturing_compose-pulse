@@ -6,7 +6,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	dockerclient "github.com/docker/docker/client"
 )
@@ -31,12 +33,19 @@ func parseExitCode(status string) *int {
 type dockerAPI interface {
 	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
 	ContainerLogs(ctx context.Context, containerID string, options container.LogsOptions) (io.ReadCloser, error)
+	ContainerInspect(ctx context.Context, containerID string) (container.InspectResponse, error)
+	ContainerExecCreate(ctx context.Context, containerID string, options container.ExecOptions) (container.ExecCreateResponse, error)
+	ContainerExecAttach(ctx context.Context, execID string, options container.ExecAttachOptions) (types.HijackedResponse, error)
+	ContainerExecInspect(ctx context.Context, execID string) (container.ExecInspect, error)
+	ContainerStatsOneShot(ctx context.Context, containerID string) (container.StatsResponseReader, error)
 	Close() error
 }
 
 // Client wraps the official Docker SDK client.
 type Client struct {
-	api dockerAPI
+	api          dockerAPI
+	inspectMu    sync.Mutex
+	inspectCache map[string]inspectCacheEntry
 }
 
 // NewClient creates a Client connected to the local Docker daemon via DOCKER_HOST / Unix socket.

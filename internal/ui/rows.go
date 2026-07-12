@@ -9,12 +9,25 @@ import (
 // rowFilter narrows the visible row set to a state subset.
 type rowFilter int
 
-// The set of row filters selectable from the dashboard.
+// The set of row filters selectable from the dashboard. `f` cycles
+// all -> failed -> waiting -> all (TUI-DESIGN.md §3.2).
 const (
 	filterAll     rowFilter = iota
 	filterFailed            // DisplayFailed + DisplayUnhealthy
-	filterBlocked           // DisplayBlocked
+	filterWaiting           // DisplayBlocked
 )
+
+// nextFilter advances the services filter cycle.
+func nextFilter(cur rowFilter) rowFilter {
+	switch cur {
+	case filterAll:
+		return filterFailed
+	case filterFailed:
+		return filterWaiting
+	default:
+		return filterAll
+	}
+}
 
 // RowKind identifies a navigable or decorative row in the view.
 type RowKind int
@@ -25,6 +38,7 @@ const (
 	RowComposeNode
 	RowStandaloneHeader
 	RowStandalone
+	RowSpacer // blank line between project sections (not selectable)
 )
 
 // Row is one line in the unified navigation order.
@@ -47,15 +61,24 @@ func BuildRows(snap *discover.Snapshot) []Row {
 	}
 
 	var rows []Row
-	for _, project := range snap.Projects {
+	for i, project := range snap.Projects {
+		if i > 0 {
+			rows = append(rows, Row{Kind: RowSpacer})
+		}
 		rows = append(rows, Row{
-			Kind:  RowProjectHeader,
-			Label: "COMPOSE · " + project.Name,
+			Kind:        RowProjectHeader,
+			Label:       "COMPOSE · " + project.Name,
+			ProjectName: project.Name,
+			ConfigFiles: project.ConfigFiles,
+			Graph:       project.Graph,
 		})
 		rows = appendComposeRows(rows, project.Name, project.ConfigFiles, project.Graph)
 	}
 
 	if len(snap.Standalone) > 0 {
+		if len(rows) > 0 {
+			rows = append(rows, Row{Kind: RowSpacer})
+		}
 		rows = append(rows, Row{
 			Kind:  RowStandaloneHeader,
 			Label: "OTHER CONTAINERS",
@@ -114,6 +137,8 @@ func appendComposeRows(rows []Row, projectName string, configFiles []string, g *
 // rowKey returns a stable identifier for cursor preservation across rebuilds.
 func rowKey(r Row) string {
 	switch r.Kind {
+	case RowProjectHeader:
+		return "project:" + r.ProjectName
 	case RowComposeNode:
 		return "compose:" + r.ProjectName + ":" + r.Node.Name
 	case RowStandalone:
@@ -148,9 +173,11 @@ func clampCursor(cur int, rows []Row) int {
 	return firstSelectable(rows)
 }
 
-// filterRows returns rows matching f. Project headers are kept only when at
-// least one of their child rows matches. Tree line prefixes are flattened to
-// two spaces in filtered views (the filtered list is not a tree).
+// filterRows returns rows matching f. The project row is always kept — it is
+// the project's own selectable summary, not a service, so the services
+// filter never hides it. The standalone header is kept only when at least
+// one of its child rows matches. Tree line prefixes are flattened to two
+// spaces in filtered views (the filtered list is not a tree).
 func filterRows(rows []Row, f rowFilter) []Row {
 	if f == filterAll {
 		return rows
@@ -163,7 +190,16 @@ func filterRows(rows []Row, f rowFilter) []Row {
 
 	for _, r := range rows {
 		switch r.Kind {
-		case RowProjectHeader, RowStandaloneHeader:
+		case RowProjectHeader:
+			out = append(out, r)
+			hasPendingHeader = false
+			headerEmitted = false
+			continue
+		case RowSpacer:
+			// Keep project gaps in filtered views too.
+			out = append(out, r)
+			continue
+		case RowStandaloneHeader:
 			pendingHeader = r
 			hasPendingHeader = true
 			headerEmitted = false
@@ -188,8 +224,8 @@ func emptyFilterMessage(f rowFilter) string {
 	switch f {
 	case filterFailed:
 		return "No failed services 🎉"
-	case filterBlocked:
-		return "No blocked services 🎉"
+	case filterWaiting:
+		return "No waiting services 🎉"
 	default:
 		return "No containers found."
 	}
@@ -202,7 +238,7 @@ func rowMatchesFilter(r Row, f rowFilter) bool {
 		switch f {
 		case filterFailed:
 			return state == dag.DisplayFailed || state == dag.DisplayUnhealthy
-		case filterBlocked:
+		case filterWaiting:
 			return state == dag.DisplayBlocked
 		}
 	case RowStandalone:

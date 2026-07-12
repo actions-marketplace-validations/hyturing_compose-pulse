@@ -17,43 +17,64 @@ type helpGroup struct {
 	entries []helpEntry
 }
 
-// helpGroups is the full key reference shown in the help overlay. Later
-// phases append their own rows here (Health tab, doctor/timeline/impact/probe,
-// report copy, watch cockpit) rather than inventing a new overlay.
+// helpGroups is the complete key reference from TUI-DESIGN.md §7 — the
+// contract for both the help overlay (?) and the x menu's keybindings
+// section. Adding a key here means removing one.
 var helpGroups = []helpGroup{
 	{
 		title: "Navigation",
 		entries: []helpEntry{
-			{"↑↓ / j k", "move selection"},
-			{"tab / ← →", "switch panel"},
-			{"enter", "fullscreen logs"},
-			{"g / End", "follow logs"},
-			{"q / ctrl+c", "quit"},
+			{"↑↓ / j k", "move in focused panel / select in timeline"},
+			{"tab / ← →", "switch panel: left graph ↔ main"},
+			{"1-4 / [ ]", "service tabs: logs / stats / deps / health"},
+			{"1-3 / [ ]", "project tabs: doctor / timeline / graph"},
+			{"enter", "zoom · jump to service · run probe"},
+			{"esc", "back / un-zoom / clear filter — never quits"},
+			{"q", "quit (in zoom: un-zoom) · ctrl+c always quits"},
 		},
 	},
 	{
-		title: "Views",
+		title: "Menus",
 		entries: []helpEntry{
-			{"1", "overview tab"},
-			{"2", "logs tab"},
-			{"3", "deps tab"},
+			{"x", "menu: actions for the selection + full keymap"},
+			{"?", "help"},
 		},
 	},
 	{
-		title: "Filters",
+		title: "Service list",
 		entries: []helpEntry{
-			{"f", "toggle failed filter"},
-			{"b", "toggle blocked filter"},
-			{"esc", "clear filter"},
+			{"f", "cycle service filter: all → failed → waiting"},
+			{"/", "filter: service list text / log grep"},
 		},
 	},
 	{
-		title: "Actions",
+		title: "Logs tab",
 		entries: []helpEntry{
-			{"a", "open actions menu"},
-			{"?", "toggle this help"},
+			{"g", "follow"},
+			{"n / N", "next / prev match"},
+			{"l", "load older"},
 		},
 	},
+	{
+		title: "Jumps",
+		entries: []helpEntry{
+			{"d", "jump to doctor tab"},
+			{"t", "jump to timeline tab"},
+		},
+	},
+}
+
+// keymapReferenceLines renders helpGroups as plain "key   desc" lines,
+// reused by both the help overlay and the x menu's "── keybindings ──"
+// section (TUI-DESIGN.md §5).
+func keymapReferenceLines() []string {
+	var lines []string
+	for _, g := range helpGroups {
+		for _, e := range g.entries {
+			lines = append(lines, fmt.Sprintf("%-10s %s", e.key, e.desc))
+		}
+	}
+	return lines
 }
 
 func renderHelp(m Model) string {
@@ -80,8 +101,8 @@ func renderHelp(m Model) string {
 	body.WriteString("\n" + styleDim.Render("press ?, q, or esc to close"))
 
 	panelW := width - 10
-	if panelW > 50 {
-		panelW = 50
+	if panelW > 60 {
+		panelW = 60
 	}
 	if panelW < 20 {
 		panelW = width

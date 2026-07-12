@@ -69,6 +69,28 @@ func filterLines(lines []string, pattern string) []string {
 	return out
 }
 
+// matchingLineIndexes returns the indexes into lines that match pattern, in
+// order. Used by n/N grep match navigation (TUI-DESIGN.md §4.1).
+func matchingLineIndexes(lines []string, pattern string) []int {
+	if pattern == "" {
+		return nil
+	}
+	re, err := regexp.Compile(pattern)
+	var out []int
+	for i, l := range lines {
+		matched := false
+		if err == nil {
+			matched = re.MatchString(l)
+		} else {
+			matched = strings.Contains(l, pattern)
+		}
+		if matched {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
 func buildWaitingContent(m Model) string {
 	idx := findRowByKey(m.rows, m.selectedRowKey)
 	if idx < 0 || m.rows[idx].Kind != RowComposeNode {
@@ -114,14 +136,14 @@ func (m Model) logVisibleLines() int {
 }
 
 func (m Model) logViewportWidth() int {
-	if m.viewMode == viewLogFullscreen {
+	if m.viewMode == viewZoom {
 		w := m.width
 		if w < 1 {
 			w = 80
 		}
 		return w
 	}
-	_, rightW, _, compact := dashboardLayout(m.width, m.height)
+	_, mainW, _, compact := dashboardLayout(m.width, m.height)
 	if compact {
 		w := m.width
 		if w < 1 {
@@ -129,7 +151,7 @@ func (m Model) logViewportWidth() int {
 		}
 		return w
 	}
-	return rightW - 2
+	return mainW - 2
 }
 
 func (m Model) logDisplayRows() []logDisplayRow {
@@ -165,6 +187,12 @@ func logTitleSuffix(m Model) string {
 	if total == 0 {
 		return ""
 	}
+	if m.logFilter != "" {
+		matches := matchingLineIndexes(m.logs, m.logFilter)
+		if len(matches) > 0 {
+			return fmt.Sprintf(" · %d matches", len(matches))
+		}
+	}
 	if m.logFollow {
 		return fmt.Sprintf(" · %d lines · following", total)
 	}
@@ -198,7 +226,7 @@ func (m *Model) clampLogCursor() {
 	}
 	visible := m.logVisibleLines()
 	if m.viewMode == viewDashboard {
-		visible = m.previewLogVisibleLines()
+		visible = m.mainPanelVisibleLines()
 	}
 	if m.logCursor < m.logScroll {
 		m.logScroll = m.logCursor
@@ -221,7 +249,7 @@ func (m *Model) scrollToBottom() {
 	}
 	visible := m.logVisibleLines()
 	if m.viewMode == viewDashboard {
-		visible = m.previewLogVisibleLines()
+		visible = m.mainPanelVisibleLines()
 	}
 	m.logCursor = len(displayRows) - 1
 	m.logScroll = m.logMaxScroll(visible)
@@ -231,7 +259,7 @@ func (m *Model) scrollPage(delta int) {
 	m.logFollow = false
 	visible := m.logVisibleLines()
 	if m.viewMode == viewDashboard {
-		visible = m.previewLogVisibleLines()
+		visible = m.mainPanelVisibleLines()
 	}
 	m.logCursor += delta * visible
 	m.clampLogCursor()
@@ -269,6 +297,51 @@ func (m *Model) scrollHome() tea.Cmd {
 		return fetchMoreLogsCmd(m.docker, m.logContainerID, len(m.logs))
 	}
 	return nil
+}
+
+// jumpToMatch moves the cursor to the next (delta=1) or previous (delta=-1)
+// grep match (TUI-DESIGN.md §4.1, `n`/`N`). No-op when no filter is set.
+func (m *Model) jumpToMatch(delta int) {
+	if m.logFilter == "" || m.logWaiting {
+		return
+	}
+	matches := matchingLineIndexes(m.logs, m.logFilter)
+	if len(matches) == 0 {
+		return
+	}
+	displayRows := m.logDisplayRows()
+	curSource := -1
+	if m.logCursor >= 0 && m.logCursor < len(displayRows) {
+		curSource = displayRows[m.logCursor].sourceLine
+	}
+
+	var target int
+	if delta > 0 {
+		target = matches[len(matches)-1]
+		for _, idx := range matches {
+			if idx > curSource {
+				target = idx
+				break
+			}
+		}
+	} else {
+		target = matches[0]
+		for i := len(matches) - 1; i >= 0; i-- {
+			if matches[i] < curSource {
+				target = matches[i]
+				break
+			}
+		}
+	}
+
+	m.logFollow = false
+	for i, row := range displayRows {
+		if row.sourceLine == target && row.lineStart {
+			m.logCursor = i
+			break
+		}
+	}
+	m.clampLogCursor()
 }
 
 func (m *Model) applyLogMore(msg logMoreMsg) {
@@ -309,7 +382,7 @@ func (m *Model) appendLogLine(line string) {
 
 func (m Model) previewLogScroll(displayRows []logDisplayRow, visible int) (scroll int, follow bool) {
 	follow = m.logFollow
-	if m.viewMode == viewDashboard && m.panelFocus == focusGraph {
+	if m.viewMode == viewDashboard && m.panelFocus == focusLeft {
 		follow = true
 	}
 	if follow {
@@ -365,7 +438,7 @@ func renderLogFullscreen(m Model) string {
 	}
 
 	footer := styleLogFooter.Width(width).Render(
-		" q back · ↑↓/wheel scroll · g follow · / filter · l load more",
+		" q back · ↑↓/wheel scroll · g follow · / filter · n/N match · l load more",
 	)
 
 	if searchBar != "" {
