@@ -21,29 +21,33 @@ const (
 	actionModeExec
 )
 
+// actionMenuItem is one row of the x menu (TUI-DESIGN.md §5). Most items run
+// an actionspkg.Plan; a few (like "run health probe") are Special because
+// they drive UI-only state (jump to a tab, fire a different tea.Cmd) rather
+// than an external command.
 type actionMenuItem struct {
-	Label string
-	Plan  actionspkg.Plan
+	Key     string
+	Label   string
+	Plan    actionspkg.Plan
+	Special func(*Model) tea.Cmd
 }
 
+// openActionMenu opens the x menu (TUI-DESIGN.md §5), filtered to whatever
+// is currently selected: a service gets restart/stop/start/probe/rebuild
+// entries, the project row gets none (just the keybindings reference).
 func (m *Model) openActionMenu() {
-	row, ok := m.selectedActionRow()
-	if !ok {
+	visible := m.visibleRows()
+	if m.cursor < 0 || m.cursor >= len(visible) {
 		return
 	}
-	project := actionspkg.Project{Name: row.ProjectName, ConfigFiles: row.ConfigFiles}
-	service := row.Node.Name
-	m.actionItems = []actionMenuItem{
-		{Label: "restart selected", Plan: actionspkg.PlanRestartSelected(project, service)},
-		{Label: "restart dependents", Plan: actionspkg.PlanRestartDependents(project, row.Graph, service)},
-		{Label: "rebuild selected", Plan: actionspkg.PlanRebuildSelected(project, service)},
-		{Label: "rebuild + restart dependents", Plan: actionspkg.PlanRebuildAndRestartDependents(project, row.Graph, service)},
-	}
-	if row.ContainerID != "" {
-		m.actionItems = append(m.actionItems, actionMenuItem{
-			Label: "exec shell",
-			Plan:  actionspkg.PlanExecShell(row.ContainerID),
-		})
+	row := visible[m.cursor]
+	switch row.Kind {
+	case RowComposeNode:
+		m.openServiceActionMenu(row)
+	case RowProjectHeader:
+		m.actionItems = nil
+	default:
+		return
 	}
 	m.actionMode = actionModeMenu
 	m.actionCursor = 0
@@ -52,13 +56,33 @@ func (m *Model) openActionMenu() {
 	m.actionErr = ""
 }
 
-func (m Model) selectedActionRow() (Row, bool) {
-	visible := m.visibleRows()
-	if m.cursor >= len(visible) || m.cursor < 0 {
-		return Row{}, false
+func (m *Model) openServiceActionMenu(row Row) {
+	project := actionspkg.Project{Name: row.ProjectName, ConfigFiles: row.ConfigFiles}
+	service := row.Node.Name
+	m.actionItems = []actionMenuItem{
+		{Key: "r", Label: "restart", Plan: actionspkg.PlanRestartSelected(project, service)},
+		{Key: "R", Label: "restart with dependents", Plan: actionspkg.PlanRestartDependents(project, row.Graph, service)},
+		{Key: "s", Label: "stop", Plan: actionspkg.PlanStopSelected(project, service)},
+		{Key: "u", Label: "start", Plan: actionspkg.PlanStartSelected(project, service)},
+		{Key: "p", Label: "run health probe", Special: runHealthProbeAction},
+		{Label: "rebuild", Plan: actionspkg.PlanRebuildSelected(project, service)},
+		{Label: "rebuild + restart dependents", Plan: actionspkg.PlanRebuildAndRestartDependents(project, row.Graph, service)},
 	}
-	row := visible[m.cursor]
-	return row, row.Kind == RowComposeNode && row.Node != nil
+	if row.ContainerID != "" {
+		m.actionItems = append(m.actionItems, actionMenuItem{
+			Label: "exec shell",
+			Plan:  actionspkg.PlanExecShell(row.ContainerID),
+		})
+	}
+}
+
+// runHealthProbeAction closes the menu, jumps the main panel to the Health
+// tab, and fires the same probe command `enter` on that tab would.
+func runHealthProbeAction(m *Model) tea.Cmd {
+	m.closeAction()
+	m.selectionIsProject = false
+	m.mainTab = tabHealth
+	return m.triggerProbe()
 }
 
 func (m *Model) closeAction() {
@@ -95,7 +119,11 @@ func (m *Model) selectAction() tea.Cmd {
 	if len(m.actionItems) == 0 || m.actionCursor >= len(m.actionItems) {
 		return nil
 	}
-	plan := m.actionItems[m.actionCursor].Plan
+	item := m.actionItems[m.actionCursor]
+	if item.Special != nil {
+		return item.Special(m)
+	}
+	plan := item.Plan
 	m.actionPlan = plan
 	if plan.Title == "Exec shell" && len(plan.Steps) > 0 {
 		m.actionMode = actionModeExec
@@ -146,6 +174,9 @@ func waitForActionEvent(ch <-chan actionspkg.Event) tea.Cmd {
 	}
 }
 
+// renderActionView renders the x menu over the left column's services panel
+// (TUI-DESIGN.md §5): the action list/confirm/running/done/exec state, then
+// a static "── keybindings ──" reference section.
 func renderActionView(m Model, width int) string {
 	switch m.actionMode {
 	case actionModeMenu:
@@ -223,10 +254,24 @@ func renderActionMenu(m Model, width int) string {
 		if i == m.actionCursor {
 			prefix = styleLogMarker.Render("▸") + " "
 		}
-		b.WriteString(padMetaLine(prefix+item.Label, width))
+		label := item.Label
+		if item.Key != "" {
+			label = styleMenuKey.Render(item.Key) + " " + label
+		}
+		b.WriteString(padMetaLine(prefix+label, width))
+	}
+	if len(m.actionItems) == 0 {
+		b.WriteString("\n")
+		b.WriteString(padMetaLine(styleDim.Render("no actions for this selection"), width))
 	}
 	b.WriteString("\n")
 	b.WriteString(padMetaLine("enter: choose   esc: cancel", width))
+	b.WriteString("\n")
+	b.WriteString(padMetaLine(styleDim.Render("── keybindings ──"), width))
+	for _, line := range keymapReferenceLines() {
+		b.WriteString("\n")
+		b.WriteString(padMetaLine(styleDim.Render(line), width))
+	}
 	return b.String()
 }
 

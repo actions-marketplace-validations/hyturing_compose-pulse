@@ -75,7 +75,7 @@ func TestRenderLogFullscreen_FollowingShowsTailMarker(t *testing.T) {
 	}
 }
 
-func TestRenderPreview_LogViewport(t *testing.T) {
+func TestRenderInspectorLogs_Viewport(t *testing.T) {
 	logs := make([]string, 50)
 	for i := range logs {
 		logs[i] = "log line " + strings.Repeat("x", 20)
@@ -97,15 +97,15 @@ func TestRenderPreview_LogViewport(t *testing.T) {
 		logs:           logs,
 		selectedRowKey: rowKey(rows[firstSelectable(rows)]),
 		selectedSvc:    "api",
+		logFollow:      true,
 		width:          100,
 		height:         30,
-		inspectorTab:   inspectorTabLogs,
 	}
-	out := renderPreview(m, 58)
+	out := renderInspectorLogs(m, 58)
 	if !strings.Contains(out, "▸") {
-		t.Error("preview should show tail marker on latest log line")
+		t.Error("inspector logs should show tail marker on latest log line")
 	}
 	if !strings.Contains(stripANSI(out), "log line") {
-		t.Error("preview should include log content")
+		t.Error("inspector logs should include log content")
 	}
 }

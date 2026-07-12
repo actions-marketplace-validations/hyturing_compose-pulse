@@ -98,97 +98,58 @@ func TestBuildServiceInspector_Dependents(t *testing.T) {
 	}
 }
 
-func TestRenderPreview_OverviewTab(t *testing.T) {
+func TestRenderInspectorLogs_WaitingContent(t *testing.T) {
 	graph := inspectorFixture(t)
 	rows := BuildRows(&discover.Snapshot{
 		Projects: []discover.Project{{Name: "app", Graph: graph}},
 	})
 	idx := findRowByKey(rows, "compose:app:api")
-	m := Model{rows: rows, cursor: idx, inspectorTab: inspectorTabOverview}
-
-	out := stripANSI(renderPreview(m, 60))
-	if !strings.Contains(out, "Status") || !strings.Contains(out, "blocked") {
-		t.Errorf("expected overview status line, got:\n%s", out)
+	m := Model{
+		rows:           rows,
+		cursor:         idx,
+		selectedRowKey: rowKey(rows[idx]),
+		logWaiting:     true,
+		width:          100,
+		height:         30,
 	}
-	if !strings.Contains(out, "Blocked by") || !strings.Contains(out, "postgres:healthy") {
-		t.Errorf("expected blocked-by line, got:\n%s", out)
+
+	out := stripANSI(renderInspectorLogs(m, 60))
+	if !strings.Contains(out, "Blocked by") || !strings.Contains(out, "postgres") {
+		t.Errorf("expected blocked-by content, got:\n%s", out)
 	}
 }
 
-func TestRenderPreview_DepsTab(t *testing.T) {
+func TestRenderDepsTab_ShowsWaitsOnAndBlocks(t *testing.T) {
 	graph := inspectorFixture(t)
 	rows := BuildRows(&discover.Snapshot{
 		Projects: []discover.Project{{Name: "app", Graph: graph}},
 	})
 	idx := findRowByKey(rows, "compose:app:postgres")
-	m := Model{rows: rows, cursor: idx, inspectorTab: inspectorTabDeps}
-
-	out := stripANSI(renderPreview(m, 60))
-	if !strings.Contains(out, "Dependencies") {
-		t.Errorf("expected Dependencies section, got:\n%s", out)
-	}
-	if !strings.Contains(out, "init") || !strings.Contains(out, "completed") {
-		t.Errorf("expected completed init dependency, got:\n%s", out)
-	}
-	if !strings.Contains(out, "Direct dependents") || !strings.Contains(out, "api") {
-		t.Errorf("expected direct dependents section with api, got:\n%s", out)
-	}
-}
-
-func TestUpdateDashboard_TabKeysSwitchInspectorTab(t *testing.T) {
-	m := actionTestModel(t)
-
-	updated, _ := m.Update(keyMsg("2"))
-	m = updated.(Model)
-	if m.inspectorTab != inspectorTabLogs {
-		t.Fatalf("inspectorTab = %d, want logs", m.inspectorTab)
-	}
-
-	updated, _ = m.Update(keyMsg("3"))
-	m = updated.(Model)
-	if m.inspectorTab != inspectorTabDeps {
-		t.Fatalf("inspectorTab = %d, want deps", m.inspectorTab)
-	}
-
-	updated, _ = m.Update(keyMsg("1"))
-	m = updated.(Model)
-	if m.inspectorTab != inspectorTabOverview {
-		t.Fatalf("inspectorTab = %d, want overview", m.inspectorTab)
-	}
-}
-
-func TestUpdateDashboard_Tab3NoOpForStandalone(t *testing.T) {
-	snap := &discover.Snapshot{
-		Standalone: []discover.Standalone{
-			{ID: "s1", Name: "stray", Image: "nginx:alpine", State: docker.StateHealthy},
-		},
-	}
-	rows := BuildRows(snap)
-	idx := findRowByKey(rows, "standalone:s1")
 	m := Model{rows: rows, cursor: idx}
 
-	updated, _ := m.Update(keyMsg("3"))
-	m = updated.(Model)
-	if m.inspectorTab == inspectorTabDeps {
-		t.Fatal("expected 3 to be a no-op for standalone containers")
+	out := stripANSI(renderDepsTab(m, rows[idx], 60))
+	if !strings.Contains(out, "waits on") {
+		t.Errorf("expected 'waits on' section, got:\n%s", out)
+	}
+	if !strings.Contains(out, "init") {
+		t.Errorf("expected init dependency listed, got:\n%s", out)
+	}
+	if !strings.Contains(out, "blocks") || !strings.Contains(out, "api") {
+		t.Errorf("expected blocks section with api, got:\n%s", out)
 	}
 }
 
-func TestRenderPreview_StandaloneHasNoDepsTab(t *testing.T) {
-	snap := &discover.Snapshot{
-		Standalone: []discover.Standalone{
-			{ID: "s1", Name: "stray", Image: "nginx:alpine", State: docker.StateHealthy},
-		},
+func TestLeftPanelTitle_ReflectsFilter(t *testing.T) {
+	m := Model{}
+	if got := stripANSI(leftPanelTitle(m)); !strings.Contains(got, "SERVICE") || !strings.Contains(got, "STATUS") || !strings.Contains(got, "DETAIL") {
+		t.Errorf("leftPanelTitle(all) = %q, want column headers", got)
 	}
-	rows := BuildRows(snap)
-	idx := findRowByKey(rows, "standalone:s1")
-	m := Model{rows: rows, cursor: idx}
-
-	out := stripANSI(renderPreview(m, 60))
-	if strings.Contains(out, "Deps") {
-		t.Errorf("expected no Deps tab for standalone container, got:\n%s", out)
+	m.rowFilter = filterFailed
+	if got := stripANSI(leftPanelTitle(m)); !strings.Contains(got, "failed") {
+		t.Errorf("leftPanelTitle(failed) = %q, want failed in STATUS header", got)
 	}
-	if !strings.Contains(out, "stray") && !strings.Contains(out, "nginx:alpine") {
-		t.Errorf("expected standalone overview content, got:\n%s", out)
+	m.rowFilter = filterWaiting
+	if got := stripANSI(leftPanelTitle(m)); !strings.Contains(got, "waiting") {
+		t.Errorf("leftPanelTitle(waiting) = %q, want waiting in STATUS header", got)
 	}
 }

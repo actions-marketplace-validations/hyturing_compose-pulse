@@ -1,7 +1,6 @@
 # cpulse
 
 [![CI](https://github.com/hyturing/compose-pulse/actions/workflows/ci.yml/badge.svg)](https://github.com/hyturing/compose-pulse/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/hyturing/compose-pulse)](https://goreportcard.com/report/github.com/hyturing/compose-pulse)
 [![GitHub release](https://img.shields.io/github/v/release/hyturing/compose-pulse)](https://github.com/hyturing/compose-pulse/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 

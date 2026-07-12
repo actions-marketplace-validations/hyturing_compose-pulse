@@ -62,6 +62,8 @@ func projectLabel(snap *discover.Snapshot) string {
 
 // renderSummaryBar renders the top status line: project label, service
 // counts by state, and a live "updated Ns ago" freshness indicator.
+// Colored count tokens use foreground only — no per-token background, so
+// the bar stays a single clean line on the terminal background.
 func renderSummaryBar(counts stateCounts, label string, sinceUpdate time.Duration, width int) string {
 	parts := []string{
 		"cpulse",

@@ -15,7 +15,13 @@ const summaryBarHeight = 1
 // occupies, or how many content rows fit inside it, must account for this.
 const panelBorderHeight = 2
 
-func dashboardLayout(width, height int) (leftW, rightW, panelH int, compact bool) {
+// dashboardLayout splits the terminal into the left dependency-graph panel
+// and the main inspector panel (TUI-DESIGN.md §2). Below 80 cols or 20 rows
+// the main panel is dropped and the left panel takes the full width.
+//
+// The left panel is intentionally roomy enough for glyph + name + state +
+// a short hint (and CPU/MEM) without chopping words mid-label.
+func dashboardLayout(width, height int) (leftW, mainW, panelH int, compact bool) {
 	if width < 1 {
 		width = 80
 	}
@@ -26,9 +32,25 @@ func dashboardLayout(width, height int) (leftW, rightW, panelH int, compact bool
 	if width < 80 || height < 20 {
 		return width, 0, panelH, true
 	}
-	leftW = width * 2 / 5
-	rightW = width - leftW
-	return leftW, rightW, panelH, false
+	// Left panel: wide enough for columns, but not so wide DETAIL looks empty.
+	leftW = (width * 9) / 20 // 45%
+	const minLeft = 58
+	const maxLeft = 70
+	const minMain = 42
+	if leftW < minLeft {
+		leftW = minLeft
+	}
+	if leftW > maxLeft {
+		leftW = maxLeft
+	}
+	if width-leftW < minMain {
+		leftW = width - minMain
+	}
+	if leftW < 40 {
+		leftW = width / 2
+	}
+	mainW = width - leftW
+	return leftW, mainW, panelH, false
 }
 
 // panelInnerHeight returns how many content rows (title + body) fit inside

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mattn/go-runewidth"
+
 	"github.com/hyturing/compose-pulse/internal/compose"
 	"github.com/hyturing/compose-pulse/internal/dag"
 	"github.com/hyturing/compose-pulse/internal/discover"
@@ -48,8 +50,8 @@ func TestFormatComposeLine_StatesRenderCleanly(t *testing.T) {
 	if !strings.Contains(out, "blocked") {
 		t.Error("expected blocked state label for api")
 	}
-	if !strings.Contains(out, "db:healthy") {
-		t.Error("expected blocker hint db:healthy for api")
+	if !strings.Contains(out, "←1 deps") {
+		t.Error("expected blocked hint '←1 deps' for api")
 	}
 	if strings.Contains(out, "also←") {
 		t.Error("did not expect legacy also← noise in rendered tree")
@@ -71,11 +73,131 @@ func TestNameColumn_AlignsAcrossDepths(t *testing.T) {
 		Projects: []discover.Project{{Name: "app", Graph: graph}},
 	})
 
-	col := nameColumn(rows, 80)
+	col := nameColumn(rows, 40)
 	if col < 1 {
 		t.Fatalf("nameColumn = %d, want >= 1", col)
 	}
 	if col > 40 {
-		t.Fatalf("nameColumn = %d, want <= panelWidth/2 (40)", col)
+		t.Fatalf("nameColumn = %d, want <= maxWidth 40", col)
 	}
+}
+
+func TestFormatComposeLine_ColumnAligned(t *testing.T) {
+	cfg := &compose.Config{
+		Services: map[string]compose.Service{
+			"db":  {},
+			"api": {DependsOn: compose.DependsOn{"db": {Condition: "service_healthy"}}},
+		},
+	}
+	graph, err := dag.Build(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph.ByName["db"].ContainerID = "d1"
+	graph.ByName["db"].State = docker.StateExited
+	graph.ByName["db"].ExitCode = intPtr(0)
+	rows := BuildRows(&discover.Snapshot{
+		Projects: []discover.Project{{Name: "app", Graph: graph}},
+	})
+	cols := computeGraphColumns(rows, 72)
+	m := Model{}
+
+	var stateStarts []int
+	for _, r := range rows {
+		if r.Kind != RowComposeNode {
+			continue
+		}
+		line := formatComposeLine(m, r, cols)
+		plain := stripANSI(line)
+		label := displayStateLabel(displayAndWaiting(r))
+		idx := visualIndex(plain, label)
+		if idx < 0 {
+			t.Fatalf("state %q not in %q", label, plain)
+		}
+		stateStarts = append(stateStarts, idx)
+	}
+	if len(stateStarts) < 2 {
+		t.Fatal("expected at least 2 service rows")
+	}
+	for i := 1; i < len(stateStarts); i++ {
+		if stateStarts[i] != stateStarts[0] {
+			t.Fatalf("state column misaligned: starts at %v", stateStarts)
+		}
+	}
+}
+
+func TestFormatProjectHeader_ColumnAlignedWithServices(t *testing.T) {
+	cfg := &compose.Config{
+		Services: map[string]compose.Service{
+			"db":  {},
+			"api": {DependsOn: compose.DependsOn{"db": {Condition: "service_healthy"}}},
+		},
+	}
+	graph, err := dag.Build(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph.ByName["db"].ContainerID = "d1"
+	graph.ByName["db"].State = docker.StateExited
+	graph.ByName["db"].ExitCode = intPtr(0)
+	rows := BuildRows(&discover.Snapshot{
+		Projects: []discover.Project{{Name: "demo", Graph: graph}},
+	})
+	cols := computeGraphColumns(rows, 72)
+	m := Model{}
+
+	var projLine, svcLine string
+	var svcRow Row
+	for _, r := range rows {
+		switch r.Kind {
+		case RowProjectHeader:
+			projLine = stripANSI(formatProjectHeader(r, 0, cols))
+		case RowComposeNode:
+			if svcLine == "" {
+				svcRow = r
+				svcLine = stripANSI(formatComposeLine(m, r, cols))
+			}
+		}
+	}
+	if projLine == "" || svcLine == "" {
+		t.Fatal("expected project and service lines")
+	}
+	if !strings.Contains(projLine, "demo") {
+		t.Fatalf("expected project name in header: %q", projLine)
+	}
+	if strings.Contains(projLine, "fail") || strings.Contains(projLine, "wait") || strings.Contains(projLine, "svc") {
+		t.Fatalf("project row should not carry summary counts: %q", projLine)
+	}
+	want := cols.nameW + graphColGap
+	svcLabel := displayStateLabel(displayAndWaiting(svcRow))
+	if got := visualIndex(svcLine, svcLabel); got != want {
+		t.Fatalf("service STATUS col at %d, want %d\nsvc=%q", got, want, svcLine)
+	}
+}
+
+func TestFormatProjectSummaryLine_ShowsCounts(t *testing.T) {
+	cfg := &compose.Config{Services: map[string]compose.Service{"db": {}, "api": {}}}
+	graph, err := dag.Build(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph.ByName["db"].ContainerID = "d1"
+	graph.ByName["db"].State = docker.StateExited
+	graph.ByName["db"].ExitCode = intPtr(1)
+	line := stripANSI(formatProjectSummaryLine(graph, 0, 80))
+	if !strings.Contains(line, "2 services") {
+		t.Fatalf("expected service count, got %q", line)
+	}
+	if !strings.Contains(line, "fail") {
+		t.Fatalf("expected fail bucket, got %q", line)
+	}
+}
+
+// visualIndex returns the display-column index of substr in s, or -1.
+func visualIndex(s, substr string) int {
+	byteIdx := strings.Index(s, substr)
+	if byteIdx < 0 {
+		return -1
+	}
+	return runewidth.StringWidth(s[:byteIdx])
 }

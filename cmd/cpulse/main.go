@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -17,13 +18,27 @@ var version = "dev"
 
 func main() {
 	if err := run(); err != nil {
+		if errors.Is(err, errCriticalFindings) {
+			os.Exit(1)
+		}
 		fmt.Fprintf(os.Stderr, "cpulse: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func run() error {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "doctor":
+			return cmdDoctor(os.Args[2:])
+		case "help", "-h", "--help":
+			printUsage()
+			return nil
+		}
+	}
+
 	ver := flag.Bool("version", false, "Print version and exit")
+	flag.Usage = printUsage
 	flag.Parse()
 
 	if *ver {
@@ -48,4 +63,18 @@ func run() error {
 		return err
 	}
 	return nil
+}
+
+func printUsage() {
+	fmt.Fprintf(os.Stderr, `cpulse %s — Docker Compose startup debugger
+
+Usage:
+  cpulse              Launch the TUI dashboard
+  cpulse doctor       Diagnose why a stack is stuck
+  cpulse --version    Print version
+
+Doctor flags:
+  --project NAME      Limit to one compose project
+
+`, version)
 }
