@@ -33,7 +33,7 @@ func FindRootCause(ctx Context) *RootCause {
 		display, waitingOn := dag.Display(n, g)
 		displays[n.Name] = display
 		waiting[n.Name] = waitingOn
-		if display == dag.DisplayFailed || display == dag.DisplayUnhealthy || restartLooping(ctx, n.Name) {
+		if display == dag.DisplayFailed || display == dag.DisplayUnhealthy || display == dag.DisplayMissing || restartLooping(ctx, n.Name) {
 			broken[n.Name] = true
 			brokenOrdered = append(brokenOrdered, n.Name)
 		}

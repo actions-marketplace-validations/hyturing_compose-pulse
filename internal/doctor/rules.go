@@ -14,6 +14,7 @@ import (
 // DefaultRules returns the built-in Phase 2 doctor rule set.
 func DefaultRules() []Rule {
 	return []Rule{
+		missingDependencyRule{},
 		blockedByUnhealthyRule{},
 		unhealthyServiceRule{},
 		initFailedRule{},
@@ -27,6 +28,41 @@ func DefaultRules() []Rule {
 		restartLoopRule{},
 		oomKilledRule{},
 	}
+}
+
+type missingDependencyRule struct{}
+
+func (missingDependencyRule) ID() string { return "missing-dependency" }
+func (r missingDependencyRule) Check(ctx Context) []Finding {
+	g := graphFrom(ctx)
+	if g == nil {
+		return nil
+	}
+	var findings []Finding
+	for _, n := range g.Ordered {
+		display, waitingOn := dag.Display(n, g)
+		if display != dag.DisplayBlocked {
+			continue
+		}
+		for _, depName := range waitingOn {
+			dep := g.ByName[depName]
+			if dep == nil || dep.ContainerID != "" {
+				continue
+			}
+			findings = append(findings, Finding{
+				RuleID:   r.ID(),
+				Service:  n.Name,
+				Title:    "Blocked by missing dependency",
+				Detail:   fmt.Sprintf("%s is waiting on %s, which has no container.", n.Name, depName),
+				Severity: SeverityCritical,
+				Evidence: []string{fmt.Sprintf("waiting_on=%s", depName), "container_id="},
+				Suggestion: []string{
+					fmt.Sprintf("Recreate %s (e.g. docker compose up %s) or remove the depends_on edge.", depName, depName),
+				},
+			})
+		}
+	}
+	return findings
 }
 
 type blockedByUnhealthyRule struct{}

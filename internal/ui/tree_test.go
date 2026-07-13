@@ -39,7 +39,7 @@ func TestFormatComposeLine_StatesRenderCleanly(t *testing.T) {
 	rows := BuildRows(&discover.Snapshot{
 		Projects: []discover.Project{{Name: "app", Graph: graph}},
 	})
-	out := renderView(rows, firstSelectable(rows), 0, 80)
+	out := renderView(rows, firstSelectable(rows), 80)
 
 	if !strings.Contains(out, "✓") {
 		t.Error("expected completed glyph ✓ for exited-0 init job")
@@ -55,6 +55,38 @@ func TestFormatComposeLine_StatesRenderCleanly(t *testing.T) {
 	}
 	if strings.Contains(out, "also←") {
 		t.Error("did not expect legacy also← noise in rendered tree")
+	}
+}
+
+func TestFormatComposeLine_MissingDependency(t *testing.T) {
+	cfg := &compose.Config{
+		Services: map[string]compose.Service{
+			"db-init": {},
+			"django": {DependsOn: compose.DependsOn{
+				"db-init": {Condition: "service_completed_successfully"},
+			}},
+		},
+	}
+	graph, err := dag.Build(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph.ByName["django"].ContainerID = "d1"
+	graph.ByName["django"].State = docker.StateHealthy
+
+	rows := BuildRows(&discover.Snapshot{
+		Projects: []discover.Project{{Name: "allocore", Graph: graph}},
+	})
+	out := renderView(rows, firstSelectable(rows), 100)
+
+	if !strings.Contains(out, "missing") {
+		t.Fatalf("expected missing state label for deleted db-init, got:\n%s", out)
+	}
+	if !strings.Contains(out, "no container") {
+		t.Fatalf("expected 'no container' detail for missing dep, got:\n%s", out)
+	}
+	if !strings.Contains(out, "blocked") {
+		t.Fatalf("expected django blocked on missing dep, got:\n%s", out)
 	}
 }
 

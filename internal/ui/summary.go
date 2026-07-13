@@ -13,7 +13,7 @@ import (
 
 // stateCounts tallies services across all projects by derived DisplayState.
 type stateCounts struct {
-	Total, Healthy, Starting, Blocked, Pending,
+	Total, Healthy, Starting, Blocked, Pending, Missing,
 	Completed, Failed, Unhealthy, Standalone int
 }
 
@@ -40,6 +40,8 @@ func countStates(snap *discover.Snapshot) stateCounts {
 				c.Failed++
 			case dag.DisplayCompleted:
 				c.Completed++
+			case dag.DisplayMissing:
+				c.Missing++
 			case dag.DisplayPending:
 				c.Pending++
 			}
@@ -81,6 +83,7 @@ func renderSummaryBar(counts stateCounts, label string, sinceUpdate time.Duratio
 		{counts.Blocked, "blocked", colorPending},
 		{counts.Unhealthy, "unhealthy", colorUnhealthy},
 		{counts.Failed, "failed", colorUnhealthy},
+		{counts.Missing, "missing", colorUnhealthy},
 		{counts.Completed, "completed", colorHealthy},
 		{counts.Pending, "pending", colorPending},
 	}

@@ -66,6 +66,27 @@ func TestRules_FireAndStaySilent(t *testing.T) {
 		check  func(t *testing.T, findings []Finding)
 	}{
 		{
+			ruleID: "missing-dependency",
+			fire: func(t *testing.T) Context {
+				ctx := testContext(t, map[string]compose.Service{
+					"db-init": {},
+					"django":  {DependsOn: compose.DependsOn{"db-init": {Condition: "service_completed_successfully"}}},
+				})
+				setNode(ctx, "django", "django1", docker.StateHealthy, nil)
+				setNode(ctx, "db-init", "", docker.StatePending, nil)
+				return ctx
+			},
+			silent: func(t *testing.T) Context {
+				ctx := testContext(t, map[string]compose.Service{
+					"db-init": {},
+					"django":  {DependsOn: compose.DependsOn{"db-init": {Condition: "service_completed_successfully"}}},
+				})
+				setNode(ctx, "db-init", "init1", docker.StateExited, intPtr(0))
+				setNode(ctx, "django", "django1", docker.StateHealthy, nil)
+				return ctx
+			},
+		},
+		{
 			ruleID: "blocked-by-unhealthy",
 			fire: func(t *testing.T) Context {
 				ctx := testContext(t, map[string]compose.Service{

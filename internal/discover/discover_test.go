@@ -231,3 +231,38 @@ func TestFromContainers_AssignsState(t *testing.T) {
 		t.Errorf("expected healthy state on node, got %v", node.State)
 	}
 }
+
+func TestFromContainers_MissingDependencyIsStubbed(t *testing.T) {
+	// django still declares depends_on db-init via label, but db-init container
+	// was deleted — discovery must not fail; stub the missing dep as pending.
+	containers := []docker.ContainerInfo{
+		{
+			ID: "django",
+			Labels: map[string]string{
+				labelProject:   "allocore",
+				labelService:   "django",
+				labelDependsOn: `{"db-init":{"condition":"service_completed_successfully","required":true}}`,
+			},
+			State: docker.StateHealthy,
+		},
+	}
+
+	snap, err := FromContainers(containers)
+	if err != nil {
+		t.Fatalf("FromContainers should tolerate missing dep target, got: %v", err)
+	}
+	g := snap.Projects[0].Graph
+	if _, ok := g.ByName["db-init"]; !ok {
+		t.Fatal("expected stub node for missing dependency db-init")
+	}
+	if g.ByName["db-init"].ContainerID != "" {
+		t.Errorf("stub should have empty ContainerID, got %q", g.ByName["db-init"].ContainerID)
+	}
+	if g.ByName["db-init"].State != docker.StatePending {
+		t.Errorf("stub state = %v, want pending", g.ByName["db-init"].State)
+	}
+	deps := g.ByName["django"].Deps
+	if len(deps) != 1 || deps[0] != "db-init" {
+		t.Errorf("django.Deps = %v, want [db-init]", deps)
+	}
+}

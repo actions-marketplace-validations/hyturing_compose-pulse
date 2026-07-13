@@ -471,7 +471,7 @@ func TestRenderView_Snapshot(t *testing.T) {
 	}
 
 	rows := BuildRows(snap)
-	out := renderView(rows, firstSelectable(rows), 0, 80)
+	out := renderView(rows, firstSelectable(rows), 80)
 
 	// Project headers and pstrees share the left panel (renderView).
 	if !strings.Contains(out, "OTHER CONTAINERS") {
@@ -710,7 +710,7 @@ func TestEffectiveState_InRender(t *testing.T) {
 	rows := BuildRows(&discover.Snapshot{
 		Projects: []discover.Project{{Name: "app", Graph: graph}},
 	})
-	out := renderView(rows, firstSelectable(rows), 0, 80)
+	out := renderView(rows, firstSelectable(rows), 80)
 	if !strings.Contains(out, "blocked") {
 		t.Error("expected blocked label for app service waiting on db:healthy")
 	}

@@ -42,6 +42,8 @@ func timelineSegmentStyle(state dag.DisplayState) lipgloss.Style {
 		return styleTLSegBlocked
 	case dag.DisplayPending:
 		return styleTLSegPending
+	case dag.DisplayMissing:
+		return styleTLSegFailed
 	case dag.DisplayStarting:
 		return styleTLSegStarting
 	case dag.DisplayUnhealthy, dag.DisplayDegraded:
@@ -61,10 +63,10 @@ func timelineLegendStyle(state dag.DisplayState) lipgloss.Style {
 		return styleTLLegendBlocked
 	case dag.DisplayPending:
 		return styleTLLegendPending
+	case dag.DisplayMissing, dag.DisplayFailed:
+		return styleTLLegendFailed
 	case dag.DisplayStarting:
 		return styleTLLegendStarting
-	case dag.DisplayFailed:
-		return styleTLLegendFailed
 	case dag.DisplayHealthy, dag.DisplayCompleted:
 		return styleTLLegendHealthy
 	default:
@@ -95,6 +97,8 @@ func timelineStatusMarker(state dag.DisplayState) (marker, word string) {
 		return "◌", word
 	case dag.DisplayPending:
 		return "○", word
+	case dag.DisplayMissing:
+		return "○", word
 	case dag.DisplayFailed, dag.DisplayUnhealthy:
 		return "×", word
 	case dag.DisplayCompleted:
@@ -114,7 +118,7 @@ func styleTimelineStatus(state dag.DisplayState, marker string) string {
 		return styleStateStarting.Render(marker)
 	case dag.DisplayBlocked:
 		return styleStateBlocked.Render(marker)
-	case dag.DisplayFailed, dag.DisplayUnhealthy:
+	case dag.DisplayFailed, dag.DisplayUnhealthy, dag.DisplayMissing:
 		return styleStateFailed.Render(marker)
 	case dag.DisplayPending, dag.DisplayDegraded:
 		return styleStatePending.Render(marker)
@@ -127,7 +131,7 @@ func timelineEndMarker(final dag.DisplayState) (string, lipgloss.Style) {
 	switch final {
 	case dag.DisplayCompleted, dag.DisplayHealthy:
 		return "◆", styleStateHealthy
-	case dag.DisplayFailed, dag.DisplayUnhealthy:
+	case dag.DisplayFailed, dag.DisplayUnhealthy, dag.DisplayMissing:
 		return "×", styleStateFailed
 	case dag.DisplayBlocked, dag.DisplayPending:
 		return "▶", styleDim
@@ -175,6 +179,7 @@ func renderTimelineLegend(leftW int) string {
 	parts := []string{
 		item(dag.DisplayBlocked, "blocked"),
 		item(dag.DisplayPending, "pending"),
+		item(dag.DisplayMissing, "missing"),
 		item(dag.DisplayStarting, "starting"),
 		item(dag.DisplayHealthy, "healthy"),
 		item(dag.DisplayFailed, "failed"),

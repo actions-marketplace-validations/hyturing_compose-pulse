@@ -12,6 +12,7 @@ const (
 	DisplayStarting  DisplayState = "starting"  // healthcheck in start period
 	DisplayBlocked   DisplayState = "blocked"   // waiting on an unsatisfied depends_on
 	DisplayPending   DisplayState = "pending"   // no container yet, no unsatisfied deps known
+	DisplayMissing   DisplayState = "missing"   // no container, but dependents are waiting on it
 	DisplayCompleted DisplayState = "completed" // exited 0 (init/migration jobs)
 	DisplayFailed    DisplayState = "failed"    // exited non-zero
 	DisplayUnhealthy DisplayState = "unhealthy" // running but healthcheck failing
@@ -25,6 +26,9 @@ func Display(n *Node, g *Graph) (DisplayState, []string) {
 	if eff == docker.StatePending {
 		if len(waitingOn) > 0 {
 			return DisplayBlocked, waitingOn
+		}
+		if n.ContainerID == "" && isUnsatisfiedDepTarget(n, g) {
+			return DisplayMissing, nil
 		}
 		return DisplayPending, nil
 	}
@@ -41,4 +45,24 @@ func Display(n *Node, g *Graph) (DisplayState, []string) {
 	default:
 		return DisplayHealthy, nil
 	}
+}
+
+// isUnsatisfiedDepTarget reports whether any other service is currently
+// blocked waiting on n (typical when n's container was deleted or never created).
+func isUnsatisfiedDepTarget(n *Node, g *Graph) bool {
+	if n == nil || g == nil {
+		return false
+	}
+	for _, other := range g.Ordered {
+		if other.Name == n.Name {
+			continue
+		}
+		_, waitingOn := EffectiveState(other, g)
+		for _, dep := range waitingOn {
+			if dep == n.Name {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -201,7 +201,7 @@ func projectSummaryParts(g *dag.Graph, spinFrame int) []string {
 	if g == nil {
 		return nil
 	}
-	var up, starting, waiting, failed, unhealthy, completed, pending int
+	var up, starting, waiting, failed, unhealthy, completed, pending, missing int
 	for _, n := range g.Ordered {
 		state, _ := dag.Display(n, g)
 		switch state {
@@ -217,6 +217,8 @@ func projectSummaryParts(g *dag.Graph, spinFrame int) []string {
 			unhealthy++
 		case dag.DisplayCompleted:
 			completed++
+		case dag.DisplayMissing:
+			missing++
 		case dag.DisplayPending:
 			pending++
 		}
@@ -230,6 +232,7 @@ func projectSummaryParts(g *dag.Graph, spinFrame int) []string {
 	}
 	add(failed, glyphFailed, "fail")
 	add(unhealthy, glyphUnhealthy, "sick")
+	add(missing, glyphMissing, "miss")
 	add(waiting, glyphPending, "wait")
 	add(starting, glyphStartingFrames[spinFrame%len(glyphStartingFrames)], "run")
 	add(up, glyphHealthy, "up")
@@ -239,7 +242,6 @@ func projectSummaryParts(g *dag.Graph, spinFrame int) []string {
 }
 
 // renderView renders a flat graph, used by pure render tests.
-func renderView(rows []Row, cursor, spinFrame, width int) string {
-	m := Model{spinFrame: spinFrame}
-	return renderGraphContent(m, rows, cursor, 0, width, len(rows)+1)
+func renderView(rows []Row, cursor, width int) string {
+	return renderGraphContent(Model{}, rows, cursor, 0, width, len(rows)+1)
 }

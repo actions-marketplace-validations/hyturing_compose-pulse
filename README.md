@@ -101,7 +101,7 @@ cpulse doctor --project myapp
 
 ## Interface
 
-Lazydocker-style layout: select on the left, inspect on the right.
+Two-pane layout: select on the left, inspect on the right.
 
 - **Top bar** — live count of services per state, and how long ago the last poll landed.
 - **Left column** — project rows + nested dependency tree. Each service row shows a state glyph, name, state label, short hint (`exit 1`, `←2 deps`, waiting-since), and live CPU/MEM columns.

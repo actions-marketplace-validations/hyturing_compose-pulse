@@ -293,6 +293,9 @@ func displayStateLabel(d dag.DisplayState) string {
 	if d == dag.DisplayPending {
 		return "pending"
 	}
+	if d == dag.DisplayMissing {
+		return "missing"
+	}
 	if d == dag.DisplayDegraded {
 		return "degraded"
 	}
@@ -307,7 +310,7 @@ func styleDisplayState(d dag.DisplayState) lipgloss.Style {
 		return styleStateStarting
 	case dag.DisplayBlocked:
 		return styleStateBlocked
-	case dag.DisplayFailed, dag.DisplayUnhealthy:
+	case dag.DisplayFailed, dag.DisplayUnhealthy, dag.DisplayMissing:
 		return styleStateFailed
 	case dag.DisplayPending:
 		return styleStatePending
@@ -332,6 +335,8 @@ func displayDetail(d dag.DisplayState, waitingOn []string, n *dag.Node) (string,
 			return "", styleDim
 		}
 		return fmt.Sprintf("←%d deps", n), styleDetailNeeds
+	case dag.DisplayMissing:
+		return "no container", styleDetailExitFail
 	case dag.DisplayUnhealthy:
 		return "health failing", styleDetailExitFail
 	default:
@@ -354,6 +359,8 @@ func displayIndicator(d dag.DisplayState, frame int) string {
 		return glyphFailed
 	case dag.DisplayDegraded:
 		return glyphDegraded
+	case dag.DisplayMissing:
+		return glyphMissing
 	case dag.DisplayBlocked, dag.DisplayPending:
 		return glyphPending
 	default:

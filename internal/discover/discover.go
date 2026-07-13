@@ -117,6 +117,22 @@ func buildProjectConfig(containers []docker.ContainerInfo) (*compose.Config, map
 		}
 	}
 
+	// Stub depends_on targets that have no service/container yet (e.g. deleted
+	// init job) so dag.Build succeeds and the TUI can show them as missing.
+	var missing []string
+	for _, svc := range services {
+		for dep := range svc.DependsOn {
+			if _, ok := services[dep]; !ok {
+				missing = append(missing, dep)
+			}
+		}
+	}
+	for _, dep := range missing {
+		if _, ok := services[dep]; !ok {
+			services[dep] = compose.Service{}
+		}
+	}
+
 	return &compose.Config{Services: services}, serviceIDs, configFiles
 }
 

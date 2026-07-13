@@ -90,6 +90,42 @@ func TestDisplay_Blocked(t *testing.T) {
 	}
 }
 
+func TestDisplay_MissingWhenDependentWaiting(t *testing.T) {
+	cfg := &compose.Config{Services: map[string]compose.Service{
+		"db-init": {},
+		"django":  {DependsOn: compose.DependsOn{"db-init": {Condition: "service_completed_successfully"}}},
+	}}
+	g, err := Build(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.ByName["django"].ContainerID = "django1"
+	g.ByName["django"].State = docker.StateHealthy
+
+	got, _ := Display(g.ByName["db-init"], g)
+	if got != DisplayMissing {
+		t.Fatalf("Display(db-init) = %v, want missing", got)
+	}
+	djangoDisp, waiting := Display(g.ByName["django"], g)
+	if djangoDisp != DisplayBlocked || len(waiting) != 1 || waiting[0] != "db-init" {
+		t.Fatalf("django = %v waiting %v, want blocked on db-init", djangoDisp, waiting)
+	}
+}
+
+func TestDisplay_PendingLeafWithNoContainer(t *testing.T) {
+	cfg := &compose.Config{Services: map[string]compose.Service{
+		"orphan": {},
+	}}
+	g, err := Build(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Display(g.ByName["orphan"], g)
+	if got != DisplayPending {
+		t.Fatalf("got %v, want pending", got)
+	}
+}
+
 func TestDisplay_ServiceCompletedSuccessfully_FailedDepBlocksDependent(t *testing.T) {
 	cfg := &compose.Config{
 		Services: map[string]compose.Service{

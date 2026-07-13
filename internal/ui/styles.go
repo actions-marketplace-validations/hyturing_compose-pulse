@@ -134,6 +134,7 @@ var spinnerFrames = []string{"◐", "◓", "◑", "◒"}
 var (
 	glyphHealthy   = lipgloss.NewStyle().Foreground(colorHealthy).Render("●")
 	glyphPending   = lipgloss.NewStyle().Foreground(colorPending).Render("┄")
+	glyphMissing   = lipgloss.NewStyle().Foreground(colorUnhealthy).Render("○")
 	glyphCompleted = lipgloss.NewStyle().Foreground(colorHealthy).Render("✓") // success, not failure
 	glyphFailed    = lipgloss.NewStyle().Foreground(colorUnhealthy).Render("✕")
 	glyphUnhealthy = lipgloss.NewStyle().Foreground(colorUnhealthy).Render("✕")
