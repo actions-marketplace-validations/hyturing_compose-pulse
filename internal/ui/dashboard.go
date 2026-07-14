@@ -61,7 +61,7 @@ func renderDashboard(m Model) string {
 	}
 	summary := renderSummaryBar(countStates(m.snapshot), projectLabel(m.snapshot), sinceUpdate, width)
 
-	status := renderStatusBar(width, formatStatusHints(width, statusHintContext(m)))
+	status := renderStatusWithFind(m, width)
 	return summary + "\n" + panels + "\n" + status
 }
 

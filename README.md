@@ -122,23 +122,25 @@ Two-pane layout: select on the left, inspect on the right.
 | `Enter` | Zoom · jump to service · run health probe |
 | `Esc` | Back / un-zoom / clear filter — never quits |
 | `f` | Cycle filter: all → failed → waiting |
-| `/` | Filter service list text, or grep logs when focused on Logs |
+| `Ctrl+F` | Focus the log find box (bottom-right; or click it) |
 | `d` | Jump to Doctor tab |
 | `t` | Jump to Timeline tab |
 | `x` | Open the actions menu for the selection |
 | `?` | Toggle the help overlay |
 | `q` | Quit (in zoom: un-zoom) |
-| `Ctrl+C` | Always quit |
 
 ### Logs
 
 | Key | Action |
 |---|---|
 | `g` / `End` | Jump to bottom and resume following |
-| `/` | Filter logs by regex |
-| `n` / `N` | Next / previous match |
+| Find box (bottom-right) | Always visible on Logs — click it or `Ctrl+F`, then type |
+| `Enter` / `Shift+Enter` | Next / previous match (counter shows `4/36`; lines stay visible) |
+| `Esc` | Clear query; press again to leave the find box |
 | `l` | Load older logs |
 | `↑`/`↓`, `k`/`j`, mouse wheel | Scroll |
+| drag in logs | Select log lines |
+| `Ctrl+C` | Copy selection (Control on macOS, not Cmd; quit with `q`) |
 | `PgUp`/`PgDn`, `Ctrl+U`/`Ctrl+D` | Page scroll |
 | `Home` | Jump to top; press again to load older logs |
 | `Enter` | Full-screen zoom |

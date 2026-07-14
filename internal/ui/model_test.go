@@ -72,7 +72,7 @@ func TestRenderDashboard(t *testing.T) {
 		snapshot: snap,
 		rows:     rows,
 		cursor:   idx,
-		width:    100,
+		width:    140,
 		height:   30,
 		lastPoll: time.Now(),
 	}
@@ -109,6 +109,9 @@ func TestRenderDashboard(t *testing.T) {
 	}
 	if !strings.Contains(out, "logs/stats/deps/health") {
 		t.Error("expected named service tab hints in status bar")
+	}
+	if !strings.Contains(stripANSI(out), "[") || !strings.Contains(stripANSI(out), "type to find") {
+		t.Error("expected dedicated find box on status bar")
 	}
 	if !strings.Contains(out, "app") || !strings.Contains(out, "1 services") || !strings.Contains(out, "updated") {
 		t.Errorf("expected summary bar with project/service counts, got:\n%s", out)

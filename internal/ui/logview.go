@@ -46,49 +46,57 @@ func prependOlderLogs(current, fetched []string) (merged []string, added int, no
 	return merged, len(older), false
 }
 
-func filterLines(lines []string, pattern string) []string {
+// compileFindPattern builds a case-insensitive matcher. Invalid regex is
+// treated as a literal string (also case-insensitive).
+func compileFindPattern(pattern string) *regexp.Regexp {
 	if pattern == "" {
-		return lines
+		return nil
 	}
-	re, err := regexp.Compile(pattern)
+	re, err := regexp.Compile("(?i)" + pattern)
 	if err != nil {
-		var out []string
-		for _, l := range lines {
-			if strings.Contains(l, pattern) {
-				out = append(out, l)
-			}
+		re, err = regexp.Compile("(?i)" + regexp.QuoteMeta(pattern))
+		if err != nil {
+			return nil
 		}
-		return out
 	}
-	var out []string
-	for _, l := range lines {
+	return re
+}
+
+// matchingLineIndexes returns the indexes into lines that match pattern, in
+// order (case-insensitive).
+func matchingLineIndexes(lines []string, pattern string) []int {
+	re := compileFindPattern(pattern)
+	if re == nil {
+		return nil
+	}
+	var out []int
+	for i, l := range lines {
 		if re.MatchString(l) {
-			out = append(out, l)
+			out = append(out, i)
 		}
 	}
 	return out
 }
 
-// matchingLineIndexes returns the indexes into lines that match pattern, in
-// order. Used by n/N grep match navigation (TUI-DESIGN.md §4.1).
-func matchingLineIndexes(lines []string, pattern string) []int {
-	if pattern == "" {
-		return nil
+// highlightFindMatches wraps case-insensitive substring/regex hits in styleLogFind.
+func highlightFindMatches(text, pattern string) string {
+	re := compileFindPattern(pattern)
+	if re == nil || text == "" {
+		return text
 	}
-	re, err := regexp.Compile(pattern)
-	var out []int
-	for i, l := range lines {
-		matched := false
-		if err == nil {
-			matched = re.MatchString(l)
-		} else {
-			matched = strings.Contains(l, pattern)
-		}
-		if matched {
-			out = append(out, i)
-		}
+	idxs := re.FindAllStringIndex(text, -1)
+	if len(idxs) == 0 {
+		return text
 	}
-	return out
+	var b strings.Builder
+	last := 0
+	for _, loc := range idxs {
+		b.WriteString(text[last:loc[0]])
+		b.WriteString(styleLogFind.Render(text[loc[0]:loc[1]]))
+		last = loc[1]
+	}
+	b.WriteString(text[last:])
+	return b.String()
 }
 
 func buildWaitingContent(m Model) string {
@@ -121,10 +129,8 @@ func buildWaitingContent(m Model) string {
 }
 
 func (m Model) logContentHeight() int {
+	// header + find footer
 	h := m.height - 2
-	if m.searching || (!m.logWaiting && m.logFilter != "") {
-		h--
-	}
 	if h < 1 {
 		return 1
 	}
@@ -133,6 +139,18 @@ func (m Model) logContentHeight() int {
 
 func (m Model) logVisibleLines() int {
 	return m.logContentHeight()
+}
+
+// logPanelVisibleLines is how many viewport rows the logs area can show.
+func (m Model) logPanelVisibleLines() int {
+	if m.viewMode == viewZoom {
+		return m.logVisibleLines()
+	}
+	visible := m.mainPanelVisibleLines()
+	if visible < 1 {
+		return 1
+	}
+	return visible
 }
 
 func (m Model) logViewportWidth() int {
@@ -175,7 +193,7 @@ func (m Model) displayLogLines() []string {
 	if m.logWaiting {
 		return strings.Split(buildWaitingContent(m), "\n")
 	}
-	return filterLines(m.logs, m.logFilter)
+	return m.logs
 }
 
 func logTitleSuffix(m Model) string {
@@ -186,12 +204,6 @@ func logTitleSuffix(m Model) string {
 	total := len(sourceLines)
 	if total == 0 {
 		return ""
-	}
-	if m.logFilter != "" {
-		matches := matchingLineIndexes(m.logs, m.logFilter)
-		if len(matches) > 0 {
-			return fmt.Sprintf(" · %d matches", len(matches))
-		}
 	}
 	if m.logFollow {
 		return fmt.Sprintf(" · %d lines · following", total)
@@ -224,10 +236,7 @@ func (m *Model) clampLogCursor() {
 	if m.logCursor < 0 {
 		m.logCursor = 0
 	}
-	visible := m.logVisibleLines()
-	if m.viewMode == viewDashboard {
-		visible = m.mainPanelVisibleLines()
-	}
+	visible := m.logPanelVisibleLines()
 	if m.logCursor < m.logScroll {
 		m.logScroll = m.logCursor
 	}
@@ -247,20 +256,14 @@ func (m *Model) scrollToBottom() {
 		m.logScroll = 0
 		return
 	}
-	visible := m.logVisibleLines()
-	if m.viewMode == viewDashboard {
-		visible = m.mainPanelVisibleLines()
-	}
+	visible := m.logPanelVisibleLines()
 	m.logCursor = len(displayRows) - 1
 	m.logScroll = m.logMaxScroll(visible)
 }
 
 func (m *Model) scrollPage(delta int) {
 	m.logFollow = false
-	visible := m.logVisibleLines()
-	if m.viewMode == viewDashboard {
-		visible = m.mainPanelVisibleLines()
-	}
+	visible := m.logPanelVisibleLines()
 	m.logCursor += delta * visible
 	m.clampLogCursor()
 }
@@ -299,51 +302,6 @@ func (m *Model) scrollHome() tea.Cmd {
 	return nil
 }
 
-// jumpToMatch moves the cursor to the next (delta=1) or previous (delta=-1)
-// grep match (TUI-DESIGN.md §4.1, `n`/`N`). No-op when no filter is set.
-func (m *Model) jumpToMatch(delta int) {
-	if m.logFilter == "" || m.logWaiting {
-		return
-	}
-	matches := matchingLineIndexes(m.logs, m.logFilter)
-	if len(matches) == 0 {
-		return
-	}
-	displayRows := m.logDisplayRows()
-	curSource := -1
-	if m.logCursor >= 0 && m.logCursor < len(displayRows) {
-		curSource = displayRows[m.logCursor].sourceLine
-	}
-
-	var target int
-	if delta > 0 {
-		target = matches[len(matches)-1]
-		for _, idx := range matches {
-			if idx > curSource {
-				target = idx
-				break
-			}
-		}
-	} else {
-		target = matches[0]
-		for i := len(matches) - 1; i >= 0; i-- {
-			if matches[i] < curSource {
-				target = matches[i]
-				break
-			}
-		}
-	}
-
-	m.logFollow = false
-	for i, row := range displayRows {
-		if row.sourceLine == target && row.lineStart {
-			m.logCursor = i
-			break
-		}
-	}
-	m.clampLogCursor()
-}
-
 func (m *Model) applyLogMore(msg logMoreMsg) {
 	m.logLoading = false
 	if msg.err != nil {
@@ -356,17 +314,20 @@ func (m *Model) applyLogMore(msg logMoreMsg) {
 		return
 	}
 	wrapW := m.logViewportWidth() - scrollBarWidth - logLinePrefixW
-	before := buildLogDisplayRows(filterLines(m.logs, m.logFilter), wrapW)
+	before := buildLogDisplayRows(m.logs, wrapW)
 	m.logs = merged
 	if len(m.logs) > logMaxLines {
 		m.logs = m.logs[len(m.logs)-logMaxLines:]
 	}
-	after := buildLogDisplayRows(filterLines(m.logs, m.logFilter), wrapW)
+	after := buildLogDisplayRows(m.logs, wrapW)
 	addedDisplay := len(after) - len(before)
 	_ = added
 	m.logCursor += addedDisplay
 	m.logScroll += addedDisplay
 	m.clampLogCursor()
+	if m.logFind != "" {
+		m.jumpToLogFind()
+	}
 }
 
 func (m *Model) appendLogLine(line string) {
@@ -378,6 +339,7 @@ func (m *Model) appendLogLine(line string) {
 			m.logCursor = len(displayRows) - 1
 		}
 	}
+	m.clampLogSelection()
 }
 
 func (m Model) previewLogScroll(displayRows []logDisplayRow, visible int) (scroll int, follow bool) {
@@ -406,7 +368,7 @@ func renderLogFullscreen(m Model) string {
 		scroll = m.logMaxScroll(visibleCount)
 	}
 
-	content := renderLogViewport(logViewportConfig{
+	cfg := logViewportConfig{
 		sourceLines:  sourceLines,
 		displayRows:  displayRows,
 		scroll:       scroll,
@@ -415,7 +377,15 @@ func renderLogFullscreen(m Model) string {
 		waiting:      m.logWaiting,
 		width:        width,
 		visibleLines: visibleCount,
-	})
+		findPattern:  m.logFind,
+	}
+	if m.logSel.has {
+		lo, hi := m.logSel.normalized()
+		cfg.hasSel = true
+		cfg.selStart = lo
+		cfg.selEnd = hi
+	}
+	content := renderLogViewport(cfg)
 	if m.logWaiting {
 		content = lipgloss.NewStyle().Italic(true).Render(content)
 	}
@@ -424,25 +394,6 @@ func renderLogFullscreen(m Model) string {
 		" cpulse · " + m.selectedSvc + logTitleSuffix(m),
 	)
 
-	var searchBar string
-	if !m.logWaiting {
-		if m.searching {
-			searchBar = styleLogFooter.Width(width).Render(
-				" " + styleSearchPrompt.Render("/") + styleSearchInput.Render(m.logFilter+"█"),
-			)
-		} else if m.logFilter != "" {
-			searchBar = styleLogFooter.Width(width).Render(
-				" " + styleSearchPrompt.Render("filter: ") + styleSearchInput.Render(m.logFilter),
-			)
-		}
-	}
-
-	footer := styleLogFooter.Width(width).Render(
-		" q back · ↑↓/wheel scroll · g follow · / filter · n/N match · l load more",
-	)
-
-	if searchBar != "" {
-		return header + "\n" + content + "\n" + searchBar + "\n" + footer
-	}
+	footer := renderZoomFooter(m, width)
 	return header + "\n" + content + "\n" + footer
 }

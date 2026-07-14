@@ -11,7 +11,6 @@ type keyMap struct {
 	PageDown     key.Binding
 	Home         key.Binding
 	Enter        key.Binding
-	Search       key.Binding
 	LoadMore     key.Binding
 	Quit         key.Binding
 	FollowEnd    key.Binding
@@ -29,8 +28,6 @@ type keyMap struct {
 	Help         key.Binding
 	JumpDoctor   key.Binding
 	JumpTimeline key.Binding
-	NextMatch    key.Binding
-	PrevMatch    key.Binding
 }
 
 var keys = keyMap{
@@ -40,9 +37,8 @@ var keys = keyMap{
 	PageDown:     key.NewBinding(key.WithKeys("pgdown", "ctrl+d"), key.WithHelp("PgDn/^D", "page down")),
 	Home:         key.NewBinding(key.WithKeys("home"), key.WithHelp("Home", "top / load more")),
 	Enter:        key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "zoom / jump / run probe")),
-	Search:       key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 	LoadMore:     key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "load older logs")),
-	Quit:         key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+	Quit:         key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
 	FollowEnd:    key.NewBinding(key.WithKeys("g", "end"), key.WithHelp("g/End", "follow logs")),
 	Tab:          key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab/←→", "switch panel")),
 	Left:         key.NewBinding(key.WithKeys("left"), key.WithHelp("←", "left column")),
@@ -58,6 +54,4 @@ var keys = keyMap{
 	Help:         key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	JumpDoctor:   key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "jump doctor")),
 	JumpTimeline: key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "jump timeline")),
-	NextMatch:    key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "next match")),
-	PrevMatch:    key.NewBinding(key.WithKeys("N"), key.WithHelp("N", "prev match")),
 }

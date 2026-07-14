@@ -43,18 +43,28 @@ var (
 			Foreground(colorAccent).
 			Bold(true)
 
+	styleLogSelected = lipgloss.NewStyle().
+				Background(lipgloss.Color("#334155")).
+				Foreground(lipgloss.Color("#f8fafc"))
+
+	styleLogFind = lipgloss.NewStyle().
+			Background(lipgloss.Color("#854d0e")).
+			Foreground(lipgloss.Color("#fefce8"))
+
 	styleScrollTrack = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#475569"))
 
 	styleScrollThumb = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#cbd5e1"))
 
-	styleSearchPrompt = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#94a3b8")).
-				Bold(true)
+	styleLogFindBox = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#94a3b8")).
+			Background(lipgloss.Color("#1e293b"))
 
-	styleSearchInput = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#f8fafc"))
+	styleLogFindBoxFocus = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#f8fafc")).
+				Background(lipgloss.Color("#0f766e")).
+				Bold(true)
 
 	styleStatusBar = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#94a3b8")).

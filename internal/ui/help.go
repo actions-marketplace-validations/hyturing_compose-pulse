@@ -30,7 +30,8 @@ var helpGroups = []helpGroup{
 			{"1-3 / [ ]", "project tabs: doctor / timeline / graph"},
 			{"enter", "zoom · jump to service · run probe"},
 			{"esc", "back / un-zoom / clear filter — never quits"},
-			{"q", "quit (in zoom: un-zoom) · ctrl+c always quits"},
+			{"q", "quit (in zoom: un-zoom)"},
+			{"ctrl+c", "copy log selection"},
 		},
 	},
 	{
@@ -44,15 +45,16 @@ var helpGroups = []helpGroup{
 		title: "Service list",
 		entries: []helpEntry{
 			{"f", "cycle service filter: all → failed → waiting"},
-			{"/", "filter: service list text / log grep"},
 		},
 	},
 	{
-		title: "Logs tab",
+		title: "Logs find",
 		entries: []helpEntry{
-			{"g", "follow"},
-			{"n / N", "next / prev match"},
-			{"l", "load older"},
+			{"box / ^F", "click status-bar box or ctrl+f to type"},
+			{"enter / S-enter", "next / previous match"},
+			{"esc", "clear query (again: unfocus)"},
+			{"g / l", "follow / load older"},
+			{"drag / ^C", "select / copy lines"},
 		},
 	},
 	{

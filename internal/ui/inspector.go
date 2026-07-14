@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/hyturing/compose-pulse/internal/dag"
@@ -119,17 +118,17 @@ func leftPanelTitle(m Model) string {
 
 // renderInspectorLogs is the Logs tab: the log viewport alone, no service metadata.
 func renderInspectorLogs(m Model, width int) string {
-	visible := m.mainPanelVisibleLines()
-	sourceLines := m.logs
+	visible := m.logPanelVisibleLines()
+	sourceLines := m.displayLogLines()
 	if m.logWaiting {
-		sourceLines = strings.Split(buildWaitingContent(m), "\n")
-	} else if len(sourceLines) == 0 {
+		// displayLogLines already expands the waiting placeholder
+	} else if len(m.logs) == 0 {
 		return padMetaLine(styleDim.Render("Waiting for logs…"), width)
 	}
 
 	displayRows := buildLogDisplayRows(sourceLines, width-scrollBarWidth-logLinePrefixW)
 	scroll, follow := m.previewLogScroll(displayRows, visible)
-	return renderLogViewport(logViewportConfig{
+	cfg := logViewportConfig{
 		sourceLines:  sourceLines,
 		displayRows:  displayRows,
 		scroll:       scroll,
@@ -138,5 +137,13 @@ func renderInspectorLogs(m Model, width int) string {
 		waiting:      m.logWaiting,
 		width:        width,
 		visibleLines: visible,
-	})
+		findPattern:  m.logFind,
+	}
+	if m.logSel.has {
+		lo, hi := m.logSel.normalized()
+		cfg.hasSel = true
+		cfg.selStart = lo
+		cfg.selEnd = hi
+	}
+	return renderLogViewport(cfg)
 }

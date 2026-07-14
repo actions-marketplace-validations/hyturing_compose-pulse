@@ -16,7 +16,13 @@ func statusHintContext(m Model) string {
 	}
 	switch m.viewMode {
 	case viewZoom:
-		return "g follow · / n/N · l older"
+		if m.copyNotice != "" {
+			return m.copyNotice
+		}
+		if m.logSel.has {
+			return "^C copy · esc clear"
+		}
+		return "drag · ^C · ^F find · g · l older"
 	case viewHelp:
 		return ""
 	}
@@ -26,7 +32,7 @@ func statusHintContext(m Model) string {
 	if m.selectionIsProject {
 		return "1-3 doctor/timeline/graph · d/t · enter zoom"
 	}
-	return "1-4 logs/stats/deps/health · f filter · / · enter zoom"
+	return "1-4 logs/stats/deps/health · f filter · enter zoom"
 }
 
 func mainPanelStatusContext(m Model) string {
@@ -42,7 +48,13 @@ func mainPanelStatusContext(m Model) string {
 	}
 	switch m.mainTab {
 	case tabLogs:
-		return "g follow · / n/N · l · enter zoom"
+		if m.copyNotice != "" {
+			return m.copyNotice
+		}
+		if m.logSel.has {
+			return "^C copy · esc clear"
+		}
+		return "drag · ^C · ^F find · g · l · enter zoom"
 	case tabHealth:
 		return "enter run probe"
 	default:

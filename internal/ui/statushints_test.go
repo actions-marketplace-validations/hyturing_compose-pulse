@@ -26,7 +26,7 @@ func TestStatusHintContext_LeftProject(t *testing.T) {
 func TestStatusHintContext_MainLogs(t *testing.T) {
 	m := Model{viewMode: viewDashboard, panelFocus: focusMain, selectionIsProject: false, mainTab: tabLogs}
 	ctx := statusHintContext(m)
-	if !strings.Contains(ctx, "g follow") || !strings.Contains(ctx, "n/N") {
+	if !strings.Contains(ctx, "drag") || !strings.Contains(ctx, "^F find") {
 		t.Fatalf("ctx=%q", ctx)
 	}
 }
@@ -50,7 +50,7 @@ func TestStatusHintContext_MainDoctor(t *testing.T) {
 func TestStatusHintContext_Zoom(t *testing.T) {
 	m := Model{viewMode: viewZoom}
 	ctx := statusHintContext(m)
-	if !strings.Contains(ctx, "g follow") || !strings.Contains(ctx, "n/N") {
+	if !strings.Contains(ctx, "drag") || !strings.Contains(ctx, "^F find") {
 		t.Fatalf("ctx=%q", ctx)
 	}
 }

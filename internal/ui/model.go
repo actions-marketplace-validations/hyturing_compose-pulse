@@ -129,8 +129,13 @@ type Model struct {
 	logLoading       bool
 	logCh            <-chan docker.LogLineMsg
 	logCancel        context.CancelFunc
-	searching        bool
-	logFilter        string
+	logFind          string
+	logFindIdx       int
+	logFindFocus     bool
+	logSel           logSelection
+	logBarDrag       logBarDrag
+	copyNotice       string
+	copyNoticeTicks  int
 
 	spinFrame     int
 	width, height int
@@ -237,7 +242,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		m.spinFrame = (m.spinFrame + 1) % len(spinnerFrames)
+		if m.copyNoticeTicks > 0 {
+			m.copyNoticeTicks--
+			if m.copyNoticeTicks == 0 {
+				m.copyNotice = ""
+			}
+		}
 		return m, tickCmd()
+
+	case logCopiedMsg:
+		if msg.err != nil {
+			m.copyNotice = "copy failed"
+		} else {
+			m.copyNotice = fmt.Sprintf("copied %d lines", msg.lines)
+		}
+		m.copyNoticeTicks = 10
+		return m, nil
 
 	case docker.PollMsg:
 		m.lastPoll = time.Now()
@@ -357,34 +377,52 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			if m.statusFindHit(msg.X, msg.Y) || m.zoomFindHit(msg.X, msg.Y) {
+				m.logFindFocus = true
+				m.clearLogSelection()
+				return m, nil
+			}
+		}
+		if m.viewMode == viewZoom {
+			m.handleLogMouse(msg)
+			return m, nil
+		}
 		leftW, _, _, compact := dashboardLayout(m.width, m.height)
 		if m.viewMode == viewDashboard && !compact {
 			if msg.X >= leftW {
 				m.panelFocus = focusMain
-				switch msg.Button {
-				case tea.MouseButtonWheelUp:
-					m.scrollLogLine(-1)
-				case tea.MouseButtonWheelDown:
-					m.scrollLogLine(1)
+				m.syncLogFindFocus()
+				if m.logsHaveViewport() {
+					m.handleLogMouse(msg)
+					return m, nil
 				}
+				m.clearLogSelection()
 			} else {
 				m.panelFocus = focusLeft
-			}
-			return m, nil
-		}
-		if m.viewMode == viewZoom && !m.searching {
-			switch msg.Button {
-			case tea.MouseButtonWheelUp:
-				m.scrollLogLine(-1)
-			case tea.MouseButtonWheelDown:
-				m.scrollLogLine(1)
+				m.logFindFocus = false
+				if msg.Action == tea.MouseActionPress {
+					m.clearLogSelection()
+				}
 			}
 		}
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.searching {
-			return m.updateSearch(msg)
+		// Copy must work even while the find box is focused.
+		if msg.String() == "ctrl+c" {
+			return m.handleCtrlC()
+		}
+		if m.logFindFocus {
+			return m.updateLogFind(msg)
+		}
+		if msg.String() == "ctrl+f" && m.showLogFindBar() {
+			m.logFindFocus = true
+			m.clearLogSelection()
+			if m.viewMode == viewDashboard {
+				m.panelFocus = focusMain
+			}
+			return m, nil
 		}
 		switch m.viewMode {
 		case viewZoom:
@@ -525,7 +563,12 @@ func (m *Model) syncSelectionStream() tea.Cmd {
 	m.logFollow = true
 	m.logNoMoreHistory = false
 	m.logLoading = false
-	m.logFilter = ""
+	m.logFind = ""
+	m.logFindIdx = 0
+	m.logFindFocus = false
+	m.clearLogSelection()
+	m.copyNotice = ""
+	m.copyNoticeTicks = 0
 	m.depsCursor = 0
 	m.probeReport = nil
 	m.probeFor = ""
@@ -600,17 +643,19 @@ func (m *Model) setRowFilter(f rowFilter) {
 
 func (m *Model) closeLogView() {
 	m.viewMode = viewDashboard
-	m.searching = false
-	m.logFilter = ""
 	m.logFollow = false
+	m.syncLogFindFocus()
 }
 
 func (m *Model) focusPanel(focus panelFocus) {
 	m.panelFocus = focus
 	if focus == focusLeft {
+		m.logFindFocus = false
 		m.logFollow = true
 		m.scrollToBottom()
+		return
 	}
+	m.syncLogFindFocus()
 }
 
 // jumpToService moves the left-column cursor to name (clearing any active
@@ -808,6 +853,7 @@ func (m *Model) zoomMainPanel() {
 	m.logFollow = true
 	m.logScroll = 0
 	m.scrollToBottom()
+	m.syncLogFindFocus()
 }
 
 func (m Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -835,12 +881,10 @@ func (m Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case m.actionMode == actionModeConfirm && key.Matches(msg, keys.Enter):
 		return m, m.beginAction()
 
-	case key.Matches(msg, keys.Quit):
-		m.stopLogStream()
-		m.cancel()
-		return m, tea.Quit
+	case msg.String() == "ctrl+c":
+		return m.handleCtrlC()
 
-	case isRune(msg, "q") && m.actionMode == actionModeNone:
+	case key.Matches(msg, keys.Quit) || (isRune(msg, "q") && m.actionMode == actionModeNone):
 		m.stopLogStream()
 		m.cancel()
 		return m, tea.Quit
@@ -873,6 +917,9 @@ func (m Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case m.actionMode == actionModeNone && msg.Type == tea.KeyEsc:
+		if m.clearLogSelection() {
+			return m, nil
+		}
 		m.setRowFilter(filterAll)
 		return m, nil
 
@@ -895,24 +942,6 @@ func (m Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.Left):
 		if !compact {
 			m.focusPanel(focusLeft)
-		}
-		return m, nil
-
-	case key.Matches(msg, keys.Search):
-		if m.panelFocus == focusMain && !m.selectionIsProject && m.mainTab == tabLogs && !m.logWaiting {
-			m.searching = true
-		}
-		return m, nil
-
-	case key.Matches(msg, keys.NextMatch):
-		if m.panelFocus == focusMain && !m.selectionIsProject && m.mainTab == tabLogs {
-			m.jumpToMatch(1)
-		}
-		return m, nil
-
-	case key.Matches(msg, keys.PrevMatch):
-		if m.panelFocus == focusMain && !m.selectionIsProject && m.mainTab == tabLogs {
-			m.jumpToMatch(-1)
 		}
 		return m, nil
 
@@ -997,6 +1026,7 @@ func (m *Model) stepMainTab(delta int) tea.Cmd {
 }
 
 func (m *Model) onMainTabChanged() tea.Cmd {
+	m.syncLogFindFocus()
 	if m.selectionIsProject && m.mainTab == tabDoctor {
 		visible := m.visibleRows()
 		if m.cursor < len(visible) {
@@ -1008,30 +1038,20 @@ func (m *Model) onMainTabChanged() tea.Cmd {
 
 func (m Model) updateZoomView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, keys.Quit):
-		m.stopLogStream()
-		m.cancel()
-		return m, tea.Quit
+	case msg.String() == "ctrl+c":
+		return m.handleCtrlC()
 
 	case msg.Type == tea.KeyEsc:
+		if m.clearLogSelection() {
+			return m, nil
+		}
 		m.closeLogView()
 
-	case isRune(msg, "q"):
+	case isRune(msg, "q") || key.Matches(msg, keys.Quit):
 		m.closeLogView()
 
 	case key.Matches(msg, keys.Enter):
 		m.closeLogView()
-
-	case key.Matches(msg, keys.Search):
-		if !m.logWaiting {
-			m.searching = true
-		}
-
-	case key.Matches(msg, keys.NextMatch):
-		m.jumpToMatch(1)
-
-	case key.Matches(msg, keys.PrevMatch):
-		m.jumpToMatch(-1)
 
 	case key.Matches(msg, keys.FollowEnd):
 		m.logFollow = true
@@ -1078,22 +1098,37 @@ func (m Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEsc:
-		m.searching = false
-		m.logFilter = ""
-	case tea.KeyEnter:
-		m.searching = false
-		m.clampLogCursor()
-	case tea.KeyBackspace:
-		if len(m.logFilter) > 0 {
-			m.logFilter = m.logFilter[:len(m.logFilter)-1]
+func (m Model) updateLogFind(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case msg.Type == tea.KeyEsc:
+		if m.logFind != "" {
+			m.setLogFind("")
+		} else {
+			m.logFindFocus = false
 		}
-	default:
-		if msg.Type == tea.KeyRunes {
-			m.logFilter += string(msg.Runes)
+	case isShiftEnter(msg):
+		m.logFindStep(-1)
+	case key.Matches(msg, keys.Enter) || msg.Type == tea.KeyEnter:
+		m.logFindStep(1)
+	case msg.Type == tea.KeyBackspace:
+		if len(m.logFind) > 0 {
+			m.setLogFind(m.logFind[:len(m.logFind)-1])
 		}
+	case msg.Type == tea.KeyRunes:
+		m.setLogFind(m.logFind + string(msg.Runes))
+	case key.Matches(msg, keys.Up):
+		m.scrollLogLine(-1)
+	case key.Matches(msg, keys.Down):
+		m.scrollLogLine(1)
+	case key.Matches(msg, keys.PageUp):
+		m.scrollPage(-1)
+	case key.Matches(msg, keys.PageDown):
+		m.scrollPage(1)
+	case key.Matches(msg, keys.Home):
+		return m, m.scrollHome()
+	case key.Matches(msg, keys.FollowEnd):
+		m.logFollow = true
+		m.scrollToBottom()
 	}
 	return m, nil
 }

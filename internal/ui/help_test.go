@@ -17,6 +17,9 @@ func TestHelpOverlay_OpenAndClose(t *testing.T) {
 	if !strings.Contains(out, "Navigation") || !strings.Contains(out, "Service list") {
 		t.Errorf("expected help groups rendered, got:\n%s", out)
 	}
+	if !strings.Contains(out, "Logs find") || !strings.Contains(out, "^F") {
+		t.Errorf("expected log find help, got:\n%s", out)
+	}
 
 	updated, _ = m.Update(keyMsg("esc"))
 	m = updated.(Model)

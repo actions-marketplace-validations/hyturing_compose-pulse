@@ -48,6 +48,21 @@ func scrollBarThumbRange(visible, scroll, total int) (start, end int) {
 		return 0, visible
 	}
 	maxScroll := total - visible
+	thumbSize := scrollBarThumbSize(visible, total)
+	if maxScroll <= 0 {
+		return 0, thumbSize
+	}
+	start = scroll * (visible - thumbSize) / maxScroll
+	return start, start + thumbSize
+}
+
+func scrollBarThumbSize(visible, total int) int {
+	if visible < 1 || total <= visible {
+		if visible < 1 {
+			return 1
+		}
+		return visible
+	}
 	thumbSize := visible * visible / total
 	if thumbSize < 1 {
 		thumbSize = 1
@@ -55,11 +70,28 @@ func scrollBarThumbRange(visible, scroll, total int) (start, end int) {
 	if thumbSize > visible {
 		thumbSize = visible
 	}
-	if maxScroll <= 0 {
-		return 0, thumbSize
+	return thumbSize
+}
+
+// scrollFromThumbStart maps a thumb-top row in the bar to a display-row scroll
+// offset. Inverse of scrollBarThumbRange's start mapping.
+func scrollFromThumbStart(thumbStart, visible, total int) int {
+	if visible < 1 || total <= visible {
+		return 0
 	}
-	start = scroll * (visible - thumbSize) / maxScroll
-	return start, start + thumbSize
+	maxScroll := total - visible
+	thumbSize := scrollBarThumbSize(visible, total)
+	track := visible - thumbSize
+	if track <= 0 || maxScroll <= 0 {
+		return 0
+	}
+	if thumbStart < 0 {
+		thumbStart = 0
+	}
+	if thumbStart > track {
+		thumbStart = track
+	}
+	return thumbStart * maxScroll / track
 }
 
 func renderScrollBarCell(row, visible, scroll, total int) string {
@@ -73,12 +105,22 @@ func renderScrollBarCell(row, visible, scroll, total int) string {
 	return styledScrollBar(false)
 }
 
-func renderLogDisplayRow(row logDisplayRow, width int, marked bool) string {
+func renderLogDisplayRow(row logDisplayRow, width int, marked, selected bool, findPattern string) string {
 	prefix := "  "
 	if marked && row.lineStart {
 		prefix = styleLogMarker.Render("▸") + " "
 	}
-	return padLine(prefix+row.text, width)
+	if selected {
+		// Selection wins over find highlight so drag-select stays visible
+		// while a find query is active.
+		text := prefix + row.text
+		return styleLogSelected.Width(width).Render(padPlain(stripANSI(text), width))
+	}
+	body := row.text
+	if findPattern != "" {
+		body = highlightFindMatches(body, findPattern)
+	}
+	return padLine(prefix+body, width)
 }
 
 type logViewportConfig struct {
@@ -90,6 +132,10 @@ type logViewportConfig struct {
 	waiting      bool
 	width        int
 	visibleLines int
+	hasSel       bool
+	selStart     int // inclusive source-line indexes when hasSel
+	selEnd       int
+	findPattern  string // highlight matches in-row when non-empty
 }
 
 func (c *logViewportConfig) ensureDisplayRows() {
@@ -154,7 +200,8 @@ func renderLogViewport(c logViewportConfig) string {
 			continue
 		}
 		row := displayRows[scroll+i]
-		out = append(out, renderLogDisplayRow(row, textWidth, cfg.markedRow(row))+bar)
+		selected := cfg.hasSel && row.sourceLine >= cfg.selStart && row.sourceLine <= cfg.selEnd
+		out = append(out, renderLogDisplayRow(row, textWidth, cfg.markedRow(row), selected, cfg.findPattern)+bar)
 	}
 	return strings.Join(out, "\n")
 }

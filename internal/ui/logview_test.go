@@ -27,7 +27,7 @@ func TestWrapToWidth_WordBreak(t *testing.T) {
 func TestRenderLogDisplayRow_MarkerOnly(t *testing.T) {
 	const textW = 79
 	row := logDisplayRow{text: "hello", sourceLine: 0, lineStart: true}
-	line := renderLogDisplayRow(row, textW, true)
+	line := renderLogDisplayRow(row, textW, true, false, "")
 	plain := stripANSI(line)
 	if !strings.Contains(plain, "▸") {
 		t.Error("expected marker arrow")
