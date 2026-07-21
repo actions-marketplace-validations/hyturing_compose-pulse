@@ -1,0 +1,14 @@
+id: invalid-healthcheck
+category: healthcheck
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: healthcheck executable is missing in the container
+  service: api
+  confidence_minimum: high
+  rule_id: health.missing_executable
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

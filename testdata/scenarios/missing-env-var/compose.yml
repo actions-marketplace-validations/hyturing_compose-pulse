@@ -1,0 +1,6 @@
+services:
+  app:
+    image: busybox:1.36
+    command: ["sh", "-c", "test -n \"$$REQUIRED_VAR\" || exit 1; sleep 3600"]
+    environment:
+      REQUIRED_VAR: ${REQUIRED_VAR:?REQUIRED_VAR must be set}

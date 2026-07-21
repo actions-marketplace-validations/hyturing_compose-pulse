@@ -1,0 +1,32 @@
+{
+  "schema_version": 2,
+  "id": "mount.bind_source_missing",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "bind-fail",
+  "effective_config": {
+    "services": [
+      {
+        "name": "app",
+        "image": "busybox:1.36",
+        "volumes": ["./missing-data:/data:ro"]
+      }
+    ]
+  },
+  "events": [
+    {
+      "run_id": "mount.bind_source_missing",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "compose",
+      "project": "bind-fail",
+      "service": "app",
+      "phase": "failed",
+      "type": "lifecycle",
+      "severity": "error",
+      "message": "Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /work/missing-data",
+      "data": {
+        "error_kind": "bind_source_missing",
+        "bind_source": "/work/missing-data"
+      }
+    }
+  ]
+}

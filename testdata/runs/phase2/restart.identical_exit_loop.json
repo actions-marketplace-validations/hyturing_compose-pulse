@@ -1,0 +1,85 @@
+{
+  "schema_version": 2,
+  "id": "restart.identical_exit_loop",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "crash-loop",
+  "events": [
+    {
+      "run_id": "restart.identical_exit_loop",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "docker",
+      "project": "crash-loop",
+      "service": "app",
+      "container_id": "cl1",
+      "phase": "failed",
+      "type": "lifecycle",
+      "severity": "error",
+      "message": "container exited",
+      "data": {"exit_code": 1, "status": "die"}
+    },
+    {
+      "run_id": "restart.identical_exit_loop",
+      "timestamp": "2026-07-22T00:00:02Z",
+      "source": "docker",
+      "project": "crash-loop",
+      "service": "app",
+      "container_id": "cl1",
+      "phase": "started",
+      "type": "lifecycle",
+      "severity": "warn",
+      "message": "container restarted",
+      "data": {"status": "restart"}
+    },
+    {
+      "run_id": "restart.identical_exit_loop",
+      "timestamp": "2026-07-22T00:00:03Z",
+      "source": "docker",
+      "project": "crash-loop",
+      "service": "app",
+      "container_id": "cl1",
+      "phase": "failed",
+      "type": "lifecycle",
+      "severity": "error",
+      "message": "container exited",
+      "data": {"exit_code": 1, "status": "die"}
+    },
+    {
+      "run_id": "restart.identical_exit_loop",
+      "timestamp": "2026-07-22T00:00:04Z",
+      "source": "docker",
+      "project": "crash-loop",
+      "service": "app",
+      "container_id": "cl1",
+      "phase": "started",
+      "type": "lifecycle",
+      "severity": "warn",
+      "message": "container restarted",
+      "data": {"status": "restart"}
+    },
+    {
+      "run_id": "restart.identical_exit_loop",
+      "timestamp": "2026-07-22T00:00:05Z",
+      "source": "docker",
+      "project": "crash-loop",
+      "service": "app",
+      "container_id": "cl1",
+      "phase": "failed",
+      "type": "lifecycle",
+      "severity": "error",
+      "message": "container exited",
+      "data": {"exit_code": 1, "status": "die"}
+    },
+    {
+      "run_id": "restart.identical_exit_loop",
+      "timestamp": "2026-07-22T00:00:06Z",
+      "source": "log",
+      "project": "crash-loop",
+      "service": "app",
+      "container_id": "cl1",
+      "phase": "failed",
+      "type": "log",
+      "severity": "error",
+      "message": "fatal: missing config"
+    }
+  ]
+}

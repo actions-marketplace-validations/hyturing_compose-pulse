@@ -3,6 +3,9 @@ bin/
 dist/
 *.exe
 
+# Local cpulse flight-recorder state (recorded runs)
+.cpulse/
+
 # Go
 *.test
 *.out
@@ -12,7 +15,6 @@ coverage.txt
 # AI tool configs (personal/local — not for the repo)
 .claude/
 .cursor/
-.cursorrules
 .codex
 .windsurfrules
 .aider.conf.yml
@@ -20,7 +22,6 @@ coverage.txt
 .aider.input.history
 .continue/
 .copilot/
-Claude.md
 plans/
 learn/
 

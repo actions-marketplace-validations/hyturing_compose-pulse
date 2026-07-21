@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "id": "config.invalid_compose",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "bad-yaml",
+  "events": [
+    {
+      "run_id": "config.invalid_compose",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "compose",
+      "project": "bad-yaml",
+      "phase": "failed",
+      "type": "lifecycle",
+      "severity": "error",
+      "message": "validating /tmp/compose.yml: services.app additional properties 'unkown_field' not allowed",
+      "data": {
+        "error_kind": "invalid_compose"
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": 2,
+  "id": "process.exit_127",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "exit127",
+  "events": [
+    {
+      "run_id": "process.exit_127",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "container",
+      "project": "exit127",
+      "service": "app",
+      "container_id": "c127",
+      "phase": "failed",
+      "type": "state",
+      "severity": "error",
+      "message": "Exited (127)",
+      "data": {
+        "exit_code": 127,
+        "status": "Exited (127)"
+      }
+    },
+    {
+      "run_id": "process.exit_127",
+      "timestamp": "2026-07-22T00:00:02Z",
+      "source": "log",
+      "project": "exit127",
+      "service": "app",
+      "container_id": "c127",
+      "phase": "failed",
+      "type": "log",
+      "severity": "error",
+      "message": "exec: \"./missing-bin\": executable file not found in $PATH"
+    }
+  ]
+}

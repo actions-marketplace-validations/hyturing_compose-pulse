@@ -16,7 +16,7 @@ import (
 const ringBufferSize = 60
 
 // statsTickInterval is the separate, slower stats ticker. The 500ms state
-// poll (docker.PollMsg) is an intentional constraint and is never touched.
+// poll (RunUpdateMsg) is an intentional constraint and is never touched.
 const statsTickInterval = 2 * time.Second
 
 // ringBuffer holds the last ringBufferSize stats samples for one container.

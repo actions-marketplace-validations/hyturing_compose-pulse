@@ -8,6 +8,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/events"
 )
 
 type mockAPI struct {
@@ -40,6 +41,17 @@ func (m *mockAPI) ContainerInspect(_ context.Context, _ string) (container.Inspe
 
 func (m *mockAPI) ContainerStatsOneShot(_ context.Context, _ string) (container.StatsResponseReader, error) {
 	return container.StatsResponseReader{}, errors.New("not implemented")
+}
+
+func (m *mockAPI) Events(ctx context.Context, _ events.ListOptions) (<-chan events.Message, <-chan error) {
+	msgs := make(chan events.Message)
+	errs := make(chan error, 1)
+	go func() {
+		defer close(msgs)
+		defer close(errs)
+		<-ctx.Done()
+	}()
+	return msgs, errs
 }
 
 func (m *mockAPI) Close() error { return nil }

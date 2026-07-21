@@ -10,18 +10,113 @@ import (
 	"time"
 
 	"github.com/hyturing/compose-pulse/internal/compose"
+	"github.com/hyturing/compose-pulse/internal/diagnosis/engine"
+	"github.com/hyturing/compose-pulse/internal/diagnosis/rules"
 	"github.com/hyturing/compose-pulse/internal/discover"
 	"github.com/hyturing/compose-pulse/internal/docker"
 	"github.com/hyturing/compose-pulse/internal/doctor"
+	"github.com/hyturing/compose-pulse/internal/report"
+	jsonreport "github.com/hyturing/compose-pulse/internal/report/json"
+	"github.com/hyturing/compose-pulse/internal/report/markdown"
+	"github.com/hyturing/compose-pulse/internal/report/sarif"
 )
 
 func cmdDoctor(args []string) error {
-	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
 	projectFilter := fs.String("project", "", "Limit diagnosis to one compose project")
+	jsonOut := fs.Bool("json", false, "Emit Phase 5 JSON report for a recorded run (headless)")
+	sarifOut := fs.Bool("sarif", false, "Emit Phase 5 SARIF for a recorded run (headless)")
+	last := fs.Bool("last", false, "Diagnose the most recent recorded run")
+	runID := fs.String("run", "", "Recorded run ID in the SQLite store")
+	file := fs.String("file", "", "Recorded run.json path")
+	dbPath := fs.String("db", "", "SQLite path (default: .cpulse/cpulse.db)")
+	failOnStr := fs.String("fail-on", "high", "Fail when findings meet confidence: high|medium|possible")
+	annotate := fs.Bool("annotate", false, "Emit GitHub Actions annotations to stderr")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return usageError(err.Error())
 	}
 
+	headless := *jsonOut || *sarifOut || *last || *runID != "" || *file != ""
+	if headless {
+		return cmdDoctorRecorded(doctorRecordedOpts{
+			project:  *projectFilter,
+			jsonOut:  *jsonOut,
+			sarifOut: *sarifOut,
+			last:     *last || (*runID == "" && *file == "" && (*jsonOut || *sarifOut)),
+			runID:    *runID,
+			file:     *file,
+			dbPath:   *dbPath,
+			failOn:   *failOnStr,
+			annotate: *annotate,
+		})
+	}
+
+	return cmdDoctorLive(*projectFilter)
+}
+
+type doctorRecordedOpts struct {
+	project, runID, file, dbPath, failOn string
+	jsonOut, sarifOut, last, annotate    bool
+}
+
+func cmdDoctorRecorded(opts doctorRecordedOpts) error {
+	failOn, err := parseFailOn(opts.failOn)
+	if err != nil {
+		return usageError(err.Error())
+	}
+	run, err := loadRecordedRun(opts.dbPath, opts.project, opts.runID, opts.file, opts.last)
+	if err != nil {
+		return err
+	}
+	findings := engine.Diagnose(run, rules.DefaultRules())
+	run.Findings = findings
+	rep := report.Build(run, findings)
+
+	if opts.annotate {
+		writeGitHubAnnotations(os.Stderr, findings)
+	}
+
+	switch {
+	case opts.sarifOut:
+		body, err := sarif.Render(rep)
+		if err != nil {
+			return err
+		}
+		if err := writeOut(os.Stdout, body); err != nil {
+			return err
+		}
+	case opts.jsonOut:
+		body, err := jsonreport.MarshalReport(rep)
+		if err != nil {
+			return err
+		}
+		if err := writeOut(os.Stdout, body); err != nil {
+			return err
+		}
+	default:
+		_, _ = fmt.Fprint(os.Stdout, markdown.Render(rep))
+	}
+
+	code := classifyRecordedFindings(findings, failOn)
+	if code != exitOK {
+		return exitCodeError{code: code, msg: "confirmed failure(s) at/above threshold"}
+	}
+	return nil
+}
+
+func writeOut(w io.Writer, body []byte) error {
+	if _, err := w.Write(body); err != nil {
+		return err
+	}
+	if len(body) == 0 || body[len(body)-1] != '\n' {
+		_, err := w.Write([]byte("\n"))
+		return err
+	}
+	return nil
+}
+
+func cmdDoctorLive(projectFilter string) error {
 	dc, err := docker.NewClient()
 	if err != nil {
 		return fmt.Errorf("connecting to Docker: %w", err)
@@ -37,7 +132,7 @@ func cmdDoctor(args []string) error {
 	matched := false
 	for i := range snap.Projects {
 		proj := &snap.Projects[i]
-		if *projectFilter != "" && proj.Name != *projectFilter {
+		if projectFilter != "" && proj.Name != projectFilter {
 			continue
 		}
 		matched = true
@@ -51,16 +146,14 @@ func cmdDoctor(args []string) error {
 			}
 		}
 	}
-	if *projectFilter != "" && !matched {
-		return fmt.Errorf("project %q not found", *projectFilter)
+	if projectFilter != "" && !matched {
+		return fmt.Errorf("project %q not found", projectFilter)
 	}
 	if exitCritical {
-		return errCriticalFindings
+		return exitCodeError{code: exitFailure, msg: "critical findings"}
 	}
 	return nil
 }
-
-var errCriticalFindings = fmt.Errorf("critical findings")
 
 func diagnoseProject(dc *docker.Client, proj *discover.Project) ([]doctor.Finding, *doctor.RootCause) {
 	var cfg *compose.Config

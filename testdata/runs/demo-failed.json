@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "id": "demo-failed",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "demo",
+  "events": [
+    {
+      "run_id": "demo-failed",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "container",
+      "project": "demo",
+      "service": "db",
+      "container_id": "cdb",
+      "phase": "healthy",
+      "type": "state",
+      "severity": "info",
+      "message": "Up (healthy)",
+      "data": {
+        "image": "postgres:16",
+        "status": "Up (healthy)",
+        "ports": ["5432/tcp"]
+      }
+    },
+    {
+      "run_id": "demo-failed",
+      "timestamp": "2026-07-22T00:00:02Z",
+      "source": "container",
+      "project": "demo",
+      "service": "api",
+      "container_id": "capi",
+      "phase": "failed",
+      "type": "state",
+      "severity": "error",
+      "message": "Exited (1)",
+      "data": {
+        "image": "api:dev",
+        "status": "Exited (1)",
+        "exit_code": 1
+      }
+    }
+  ]
+}

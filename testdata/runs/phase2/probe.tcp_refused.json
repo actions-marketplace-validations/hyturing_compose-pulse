@@ -1,0 +1,60 @@
+{
+  "schema_version": 2,
+  "id": "probe.tcp_refused",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "startup-race",
+  "events": [
+    {
+      "run_id": "probe.tcp_refused",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "probe",
+      "project": "startup-race",
+      "service": "api",
+      "phase": "process_running",
+      "type": "probe",
+      "severity": "info",
+      "message": "probe api → postgres:5432 via native_exec",
+      "data": {
+        "probe_method": "native_exec",
+        "target_host": "postgres",
+        "target_port": 5432
+      }
+    },
+    {
+      "run_id": "probe.tcp_refused",
+      "timestamp": "2026-07-22T00:00:02Z",
+      "source": "probe",
+      "project": "startup-race",
+      "service": "api",
+      "phase": "failed",
+      "type": "probe",
+      "severity": "error",
+      "message": "tcp FAIL connection refused",
+      "data": {
+        "probe_step": "tcp",
+        "probe_status": "FAIL",
+        "probe_method": "native_exec",
+        "target_host": "postgres",
+        "target_port": 5432
+      }
+    },
+    {
+      "run_id": "probe.tcp_refused",
+      "timestamp": "2026-07-22T00:00:03Z",
+      "source": "probe",
+      "project": "startup-race",
+      "service": "api",
+      "phase": "failed",
+      "type": "probe",
+      "severity": "error",
+      "message": "process_listening FAIL no listener",
+      "data": {
+        "probe_step": "process_listening",
+        "probe_status": "FAIL",
+        "probe_method": "native_exec",
+        "target_host": "postgres",
+        "target_port": 5432
+      }
+    }
+  ]
+}

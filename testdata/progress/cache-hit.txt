@@ -1,0 +1,2 @@
+#5 [api 3/3] RUN go build -o /app
+#5 CACHED

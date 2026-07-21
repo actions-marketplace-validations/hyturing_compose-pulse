@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "id": "adversarial.eventually_healthy",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "eventually-ok",
+  "effective_config": {
+    "services": [
+      {
+        "name": "api",
+        "depends_on": {"postgres": "service_healthy"}
+      },
+      {
+        "name": "postgres",
+        "healthcheck": "pg_isready"
+      }
+    ]
+  },
+  "events": [
+    {
+      "run_id": "adversarial.eventually_healthy",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "log",
+      "project": "eventually-ok",
+      "service": "api",
+      "phase": "started",
+      "type": "log",
+      "severity": "warn",
+      "message": "retry: connection refused (postgres:5432)"
+    },
+    {
+      "run_id": "adversarial.eventually_healthy",
+      "timestamp": "2026-07-22T00:00:02Z",
+      "source": "container",
+      "project": "eventually-ok",
+      "service": "postgres",
+      "phase": "healthy",
+      "type": "state",
+      "severity": "info",
+      "message": "Up (healthy)"
+    },
+    {
+      "run_id": "adversarial.eventually_healthy",
+      "timestamp": "2026-07-22T00:00:03Z",
+      "source": "container",
+      "project": "eventually-ok",
+      "service": "api",
+      "phase": "application_ready",
+      "type": "state",
+      "severity": "info",
+      "message": "ready"
+    }
+  ]
+}

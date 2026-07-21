@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "id": "image.manifest_missing",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "manifest-missing",
+  "events": [
+    {
+      "run_id": "image.manifest_missing",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "compose",
+      "project": "manifest-missing",
+      "service": "api",
+      "phase": "failed",
+      "type": "lifecycle",
+      "severity": "error",
+      "message": "Error response from daemon: manifest for example/api:does-not-exist not found: manifest unknown: manifest unknown",
+      "data": {
+        "progress_kind": "manifest_missing",
+        "image": "example/api:does-not-exist"
+      }
+    }
+  ]
+}

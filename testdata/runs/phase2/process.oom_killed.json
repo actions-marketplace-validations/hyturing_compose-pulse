@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "id": "process.oom_killed",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "oom",
+  "events": [
+    {
+      "run_id": "process.oom_killed",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "docker",
+      "project": "oom",
+      "service": "api",
+      "container_id": "coom",
+      "phase": "failed",
+      "type": "lifecycle",
+      "severity": "error",
+      "message": "container oom killed",
+      "data": {
+        "oom_killed": true,
+        "exit_code": 137
+      }
+    },
+    {
+      "run_id": "process.oom_killed",
+      "timestamp": "2026-07-22T00:00:02Z",
+      "source": "container",
+      "project": "oom",
+      "service": "api",
+      "container_id": "coom",
+      "phase": "failed",
+      "type": "state",
+      "severity": "error",
+      "message": "Exited (137)",
+      "data": {
+        "exit_code": 137,
+        "oom_killed": true,
+        "status": "Exited (137) OOMKilled"
+      }
+    }
+  ]
+}

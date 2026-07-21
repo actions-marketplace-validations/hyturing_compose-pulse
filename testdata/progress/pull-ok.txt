@@ -1,0 +1,4 @@
+db Pulling from library/postgres
+Pulling fs layer
+Status: Downloaded newer image for postgres:16
+Pulled postgres:16

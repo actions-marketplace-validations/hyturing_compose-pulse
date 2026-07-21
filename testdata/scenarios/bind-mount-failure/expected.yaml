@@ -1,0 +1,14 @@
+id: bind-mount-failure
+category: mount
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: bind mount source path does not exist
+  service: app
+  confidence_minimum: high
+  rule_id: mount.bind_source_missing
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "id": "adversarial.exit_137_sigkill",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "sigkill",
+  "events": [
+    {
+      "run_id": "adversarial.exit_137_sigkill",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "container",
+      "project": "sigkill",
+      "service": "api",
+      "phase": "failed",
+      "type": "state",
+      "severity": "error",
+      "message": "Exited (137)",
+      "data": {
+        "exit_code": 137,
+        "status": "Exited (137)",
+        "oom_killed": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "id": "name.container_conflict",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "name-conflict",
+  "events": [
+    {
+      "run_id": "name.container_conflict",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "compose",
+      "project": "name-conflict",
+      "service": "db",
+      "phase": "failed",
+      "type": "lifecycle",
+      "severity": "error",
+      "message": "Error response from daemon: Conflict. The container name \"/db\" is already in use by container \"abc123\". You have to remove (or rename) that container to be able to reuse that name.",
+      "data": {
+        "error_kind": "container_name_conflict",
+        "container_name": "db"
+      }
+    }
+  ]
+}

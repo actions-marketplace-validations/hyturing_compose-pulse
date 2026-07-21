@@ -1,0 +1,2 @@
+api Pulling from private/registry/api
+unauthorized: authentication required

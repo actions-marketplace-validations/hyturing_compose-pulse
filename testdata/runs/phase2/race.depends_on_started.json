@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "id": "race.depends_on_started",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "startup-race",
+  "effective_config": {
+    "services": [
+      {
+        "name": "api",
+        "image": "api:dev",
+        "depends_on": {"postgres": "service_started"}
+      },
+      {
+        "name": "postgres",
+        "image": "postgres:16",
+        "healthcheck": "pg_isready"
+      }
+    ]
+  },
+  "events": [
+    {
+      "run_id": "race.depends_on_started",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "container",
+      "project": "startup-race",
+      "service": "postgres",
+      "container_id": "cpg",
+      "phase": "started",
+      "type": "state",
+      "severity": "info",
+      "message": "Up"
+    },
+    {
+      "run_id": "race.depends_on_started",
+      "timestamp": "2026-07-22T00:00:02Z",
+      "source": "log",
+      "project": "startup-race",
+      "service": "api",
+      "container_id": "capi",
+      "phase": "failed",
+      "type": "log",
+      "severity": "error",
+      "message": "could not connect to server: Connection refused (postgres:5432)"
+    },
+    {
+      "run_id": "race.depends_on_started",
+      "timestamp": "2026-07-22T00:00:03Z",
+      "source": "container",
+      "project": "startup-race",
+      "service": "api",
+      "container_id": "capi",
+      "phase": "failed",
+      "type": "state",
+      "severity": "error",
+      "message": "Exited (1)",
+      "data": {"exit_code": 1}
+    },
+    {
+      "run_id": "race.depends_on_started",
+      "timestamp": "2026-07-22T00:00:04Z",
+      "source": "container",
+      "project": "startup-race",
+      "service": "postgres",
+      "container_id": "cpg",
+      "phase": "healthy",
+      "type": "state",
+      "severity": "info",
+      "message": "Up (healthy)"
+    }
+  ]
+}

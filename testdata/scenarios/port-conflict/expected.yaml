@@ -1,0 +1,14 @@
+id: port-conflict
+category: port
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: host port is already allocated
+  service: b
+  confidence_minimum: high
+  rule_id: port.host_occupied
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

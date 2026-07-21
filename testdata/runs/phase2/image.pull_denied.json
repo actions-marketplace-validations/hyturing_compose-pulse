@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "id": "image.pull_denied",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "pull-auth",
+  "events": [
+    {
+      "run_id": "image.pull_denied",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "compose",
+      "project": "pull-auth",
+      "service": "api",
+      "phase": "failed",
+      "type": "lifecycle",
+      "severity": "error",
+      "message": "Error response from daemon: pull access denied for private/api, repository does not exist or may require 'docker login': denied: requested access to the resource is denied",
+      "data": {
+        "progress_kind": "auth_error",
+        "image": "private/api"
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+id: image-pull-denied
+category: image
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: image pull access denied
+  service: api
+  confidence_minimum: high
+  rule_id: image.pull_denied
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

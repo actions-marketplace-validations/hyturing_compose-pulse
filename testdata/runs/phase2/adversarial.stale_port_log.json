@@ -1,0 +1,30 @@
+{
+  "schema_version": 2,
+  "id": "adversarial.stale_port_log",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "stale-port",
+  "events": [
+    {
+      "run_id": "adversarial.stale_port_log",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "log",
+      "project": "stale-port",
+      "service": "api",
+      "phase": "application_ready",
+      "type": "log",
+      "severity": "info",
+      "message": "note from yesterday: Bind for 0.0.0.0:18080 failed: port is already allocated"
+    },
+    {
+      "run_id": "adversarial.stale_port_log",
+      "timestamp": "2026-07-22T00:00:02Z",
+      "source": "container",
+      "project": "stale-port",
+      "service": "api",
+      "phase": "application_ready",
+      "type": "state",
+      "severity": "info",
+      "message": "Up"
+    }
+  ]
+}

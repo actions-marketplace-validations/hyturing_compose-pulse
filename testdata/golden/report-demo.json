@@ -1,0 +1,86 @@
+{
+  "blocked_services": [
+    "api"
+  ],
+  "causal_chain": [
+    "db",
+    "api"
+  ],
+  "confidence": "high",
+  "critical_path": [
+    {
+      "duration": "0s",
+      "phase": "failed",
+      "service": "db"
+    },
+    {
+      "duration": "3s",
+      "phase": "failed",
+      "service": "api"
+    }
+  ],
+  "findings": [
+    {
+      "blocked_services": [
+        "api"
+      ],
+      "confidence": "high",
+      "evidence": [
+        "exit_code=127"
+      ],
+      "root_cause": "command not found (exit 127)",
+      "rule_id": "process.exit_127",
+      "service": "db",
+      "suggested_fixes": [
+        "Fix the entrypoint"
+      ]
+    }
+  ],
+  "generated_at": "2026-07-22T00:00:00Z",
+  "log_windows": [
+    {
+      "lines": [
+        "[REDACTED] connection refused",
+        "…",
+        "— last lines —",
+        "[REDACTED] connection refused",
+        "[REDACTED] connection refused",
+        "[REDACTED] connection refused"
+      ],
+      "note": "collapsed repeated log signatures (max repeats=3); showing first occurrence per signature and last lines",
+      "repeat_count": 3,
+      "service": "api"
+    }
+  ],
+  "project": "demo",
+  "redaction_summary": [
+    "pattern:(?i)(password|passwd|secret|token|api[_-]?key)\\s*[:=]\\s*\\S+",
+    "env:DB_PASSWORD"
+  ],
+  "reproduction": "cpulse record -- docker compose up",
+  "root_cause": "command not found (exit 127)",
+  "run_id": "demo-failed",
+  "schema_version": 1,
+  "service": "db",
+  "suggested_fixes": [
+    "Fix the entrypoint"
+  ],
+  "summary": "Root cause: command not found (exit 127)",
+  "timeline": [
+    {
+      "message": "Exited (1)",
+      "phase": "failed",
+      "service": "db",
+      "timestamp": "2026-07-22T00:00:01Z"
+    },
+    {
+      "message": "blocked",
+      "phase": "failed",
+      "service": "api",
+      "timestamp": "2026-07-22T00:00:02Z"
+    }
+  ],
+  "versions": {
+    "docker": "28.0.0"
+  }
+}

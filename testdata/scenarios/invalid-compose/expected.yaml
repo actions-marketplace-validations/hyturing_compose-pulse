@@ -1,0 +1,14 @@
+id: invalid-compose
+category: config
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: compose configuration is invalid
+  service: ""
+  confidence_minimum: high
+  rule_id: config.invalid_compose
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic
