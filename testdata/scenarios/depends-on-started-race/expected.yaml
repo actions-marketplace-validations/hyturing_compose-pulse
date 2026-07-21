@@ -1,0 +1,14 @@
+id: depends-on-started-race
+category: race
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: connected before dependency was ready
+  service: api
+  confidence_minimum: high
+  rule_id: race.depends_on_started
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

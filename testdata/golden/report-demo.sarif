@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "cpulse",
+          "informationUri": "https://github.com/hyturing/compose-pulse",
+          "rules": [
+            {
+              "id": "process.exit_127",
+              "shortDescription": {
+                "text": "command not found (exit 127)"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "process.exit_127",
+          "level": "error",
+          "message": {
+            "text": "db: command not found (exit 127)"
+          }
+        }
+      ]
+    }
+  ]
+}

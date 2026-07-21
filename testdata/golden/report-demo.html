@@ -1,0 +1,11 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>cpulse incident report</title><style>
+body{font-family:ui-sans-serif,system-ui,sans-serif;margin:2rem;max-width:900px;line-height:1.45;color:#122}
+h1,h2{margin-top:1.6rem} code,pre{background:#f4f6f8;padding:.15rem .35rem;border-radius:4px}
+pre{padding:1rem;overflow:auto} .muted{color:#556} .card{border:1px solid #d8dee6;border-radius:8px;padding:1rem;margin:1rem 0}
+</style></head><body><h1>cpulse incident report</h1><p class="muted">Run <code>demo-failed</code> · 2026-07-22T00:00:00Z</p><div class="card"><strong>Summary</strong><p>Root cause: command not found (exit 127)</p><p><strong>Root cause:</strong> command not found (exit 127)<br><strong>Service:</strong> db · <strong>Confidence:</strong> high</p></div><h2>Blocked services</h2><ul><li><code>api</code></li></ul><h2>Critical path</h2><ul><li><code>db</code> failed — 0s</li><li><code>api</code> failed — 3s</li></ul><h2>Suggested fixes</h2><ul><li>Fix the entrypoint</li></ul><h2>Reproduction</h2><pre>cpulse record -- docker compose up</pre><h2>api logs</h2><p class="muted">collapsed repeated log signatures (max repeats=3); showing first occurrence per signature and last lines</p><pre>[REDACTED] connection refused
+…
+— last lines —
+[REDACTED] connection refused
+[REDACTED] connection refused
+[REDACTED] connection refused
+</pre><h2>Redaction summary</h2><ul><li><code>pattern:(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+</code></li><li><code>env:DB_PASSWORD</code></li></ul></body></html>

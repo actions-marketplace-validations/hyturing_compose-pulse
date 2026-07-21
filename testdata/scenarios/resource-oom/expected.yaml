@@ -1,0 +1,14 @@
+id: resource-oom
+category: resource
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: service reached its memory limit
+  service: worker
+  confidence_minimum: high
+  rule_id: resource.oom
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

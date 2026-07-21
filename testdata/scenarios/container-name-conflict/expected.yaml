@@ -1,0 +1,14 @@
+id: container-name-conflict
+category: name
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: container name is already in use
+  service: db
+  confidence_minimum: high
+  rule_id: name.container_conflict
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

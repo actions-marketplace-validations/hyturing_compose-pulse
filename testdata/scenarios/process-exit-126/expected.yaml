@@ -1,0 +1,14 @@
+id: process-exit-126
+category: process
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: command found but cannot execute (exit 126)
+  service: app
+  confidence_minimum: high
+  rule_id: process.exit_126
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

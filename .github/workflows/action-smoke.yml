@@ -1,0 +1,40 @@
+name: action-smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  doctor-fixture-broken:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: make build
+      - name: Doctor broken fixture (expect exit 1)
+        run: |
+          set +e
+          ./bin/cpulse doctor --file testdata/runs/phase2/config.missing_env_var.json --json --annotate --fail-on high > /tmp/out.json
+          code=$?
+          set -e
+          echo "exit=$code"
+          test "$code" -eq 1
+          grep -q schema_version /tmp/out.json
+
+  doctor-fixture-adversarial-ok:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: make build
+      - name: Doctor adversarial fixture (expect exit 0)
+        run: |
+          ./bin/cpulse doctor --file testdata/runs/phase2/adversarial.eventually_healthy.json --json --fail-on high > /tmp/ok.json
+          grep -q schema_version /tmp/ok.json

@@ -1,0 +1,14 @@
+id: image-platform-mismatch
+category: image
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: image platform does not match the host
+  service: api
+  confidence_minimum: high
+  rule_id: image.platform_mismatch
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

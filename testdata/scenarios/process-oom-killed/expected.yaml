@@ -1,0 +1,14 @@
+id: process-oom-killed
+category: process
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: container was OOM-killed
+  service: api
+  confidence_minimum: high
+  rule_id: process.oom_killed
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

@@ -4,13 +4,28 @@
 [![GitHub release](https://img.shields.io/github/v/release/hyturing/compose-pulse)](https://github.com/hyturing/compose-pulse/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**cpulse shows why your Docker Compose stack is stuck.** A terminal UI that watches every container in real time, renders the `depends_on` graph as a tree, names the root cause, and lets you probe, restart, and inspect without leaving the TUI.
+**cpulse shows why your Docker Compose stack is stuck.** A terminal UI that watches every container in real time, renders the `depends_on` graph as a tree, names the root cause, and lets you probe, restart, and inspect without leaving the TUI. Beyond the dashboard: record startups, diagnose offline, probe dependencies, compare critical paths, and ship findings to CI.
 
 ![cpulse dashboard demo](docs/demo.gif)
 
 ## The problem
 
 `docker compose up` dumps interleaved logs from every container into one stream. When something won't start, you're left guessing which service is the actual blocker, scrolling through thousands of log lines, and jumping between terminal tabs. cpulse turns that graph into something you can just look at — and tells you what's blocking what.
+
+## Beyond the TUI
+
+The same root-cause engine powers headless workflows:
+
+| Feature | What you get |
+|---|---|
+| **Flight recorder** | Wrap `docker compose up` — capture events, inspect, logs, and config into SQLite / JSON |
+| **Offline doctor** | Diagnose a recorded run (`--file`, `--last`, `--json`, `--sarif`) with confidence-gated exit codes |
+| **Dependency probes** | DNS → TCP → TLS/HTTP from inside a service's network namespace |
+| **Critical path** | Profile startup phases and compare against previous successful baselines |
+| **Incident reports** | Shareable markdown, JSON, HTML, or SARIF from the last recorded run |
+| **CI one-shot** | `cpulse test-startup` + a GitHub Action that annotates failures in PRs |
+
+See [Record, diagnose & CI](#record-diagnose--ci) for commands and examples.
 
 ## What it shows you
 
@@ -94,10 +109,116 @@ cpulse doctor --project myapp
 | Command / flag | Description |
 |---|---|
 | `cpulse` | Launch the TUI dashboard |
-| `cpulse doctor` | Diagnose why a stack is stuck |
+| `cpulse doctor` | Live diagnose, or headless over a recorded run |
 | `cpulse doctor --project NAME` | Limit diagnosis to one compose project |
+| `cpulse record -- <cmd>` | Record a Compose invocation (flight recorder) |
+| `cpulse up [args]` | Alias for `cpulse record -- docker compose up [args]` |
+| `cpulse replay FILE` | Replay a recorded `run.json` through the run model |
+| `cpulse probe <svc> <host:port>` | Run dependency probe chain from a service's network |
+| `cpulse compare --last successful` | Compare current run critical path to baseline |
+| `cpulse report --last --format <md\|json\|html\|sarif>` | Shareable incident report from last recorded run |
+| `cpulse test-startup` | Headless record + diagnose of `docker compose up --wait` |
 | `cpulse --version` | Print version and exit |
 | `cpulse help` | Print usage |
+
+## Record, diagnose & CI
+
+Beyond the TUI, cpulse can **record** a Compose startup, **diagnose** the run with a root-cause engine, **probe** dependencies from inside a service's network, **compare** critical-path timings, and emit **shareable reports** for CI.
+
+### Flight recorder
+
+Wrap any Compose command to capture events, inspect snapshots, logs, and effective config into SQLite (default `.cpulse/cpulse.db`) and an optional JSON export:
+
+```sh
+cpulse record -- docker compose up --wait
+cpulse record --db .cpulse/ci.db --output run.json -- docker compose up --wait
+cpulse up --wait   # same as: cpulse record -- docker compose up --wait
+```
+
+Secrets in env values are redacted. Pass `--include-env-values` only when you need values persisted (names are stored by default).
+
+Replay a fixture or export without Docker:
+
+```sh
+cpulse replay path/to/run.json
+```
+
+### Doctor over recorded runs
+
+Live `cpulse doctor` still works against the daemon. Against a recorded run you can select by file, run ID, or “last”, and emit machine-readable output:
+
+```sh
+cpulse doctor --file testdata/runs/phase2/config.missing_env_var.json
+cpulse doctor --last --db .cpulse/ci.db --json --fail-on high
+cpulse doctor --run <id> --sarif --annotate
+```
+
+| Flag | Description |
+|---|---|
+| `--project NAME` | Limit to one compose project (live mode) |
+| `--file PATH` | Diagnose a `run.json` fixture |
+| `--last` / `--run ID` | Select a run from SQLite |
+| `--db FILE` | SQLite path (default: `.cpulse/cpulse.db`) |
+| `--json` / `--sarif` | Headless report formats over a recorded run |
+| `--fail-on LEVEL` | `high` \| `medium` \| `possible` (default `high`) |
+| `--annotate` | Emit GitHub Actions annotations on stderr |
+
+### Dependency probes
+
+Run the probe chain (DNS → TCP → optional TLS/HTTP) from a service container's network namespace:
+
+```sh
+cpulse probe api db:5432
+cpulse probe --project myapp --tls --http /ready api backend:8443
+```
+
+### Critical path compare
+
+Compare the latest recorded run's stack critical path against previous successful baselines:
+
+```sh
+cpulse compare --last successful
+cpulse compare --last successful --project myapp --db .cpulse/ci.db
+```
+
+### Incident reports
+
+Generate a shareable report from the last recorded run (markdown, JSON, HTML, or SARIF):
+
+```sh
+cpulse report --last --format markdown
+cpulse report --last --format html --output incident.html
+cpulse report --last --format sarif --project myapp
+```
+
+### CI one-shot
+
+Record `docker compose up --wait`, diagnose, and exit with a CI-friendly code:
+
+```sh
+cpulse test-startup --fail-on high
+cpulse test-startup --db .cpulse/ci.db --timeout 10m -- --build
+```
+
+| Exit code | Meaning |
+|---|---|
+| `0` | Healthy / no findings at or above `--fail-on` |
+| `1` | Confirmed failure(s) at or above threshold |
+| `2` | Timeout (`test-startup --timeout`) |
+| `3` | Compose failed to launch / record error |
+| `4` | Usage error |
+
+A composite GitHub Action at the repo root records compose up, runs doctor with SARIF + annotations, and can upload an HTML report:
+
+```yaml
+- uses: hyturing/compose-pulse@main
+  with:
+    compose-args: '--build'
+    fail-on: high
+    upload-html: true
+```
+
+More detail: [docs/ci.md](docs/ci.md).
 
 ## Interface
 

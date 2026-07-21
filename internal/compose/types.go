@@ -1,6 +1,11 @@
 package compose
 
-import "gopkg.in/yaml.v3"
+import (
+	"fmt"
+	"strconv"
+
+	"gopkg.in/yaml.v3"
+)
 
 // Config represents the top-level docker-compose.yml structure.
 type Config struct {
@@ -15,8 +20,68 @@ type Service struct {
 	DependsOn   DependsOn         `yaml:"depends_on"`
 	Healthcheck *Healthcheck      `yaml:"healthcheck"`
 	Restart     string            `yaml:"restart"`
-	Ports       []string          `yaml:"ports"`
+	Ports       Ports             `yaml:"ports"`
 	Environment map[string]string `yaml:"environment"`
+}
+
+// Ports supports short-form strings and long-form maps from `docker compose config`:
+//
+//	ports: ["8080:80"]
+//	ports: [{target: 80, published: "8080", protocol: tcp}]
+type Ports []string
+
+// UnmarshalYAML accepts scalar short-form and long-form mapping port entries.
+func (p *Ports) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.SequenceNode {
+		return nil
+	}
+	out := make(Ports, 0, len(value.Content))
+	for _, node := range value.Content {
+		switch node.Kind {
+		case yaml.ScalarNode:
+			var s string
+			if err := node.Decode(&s); err != nil {
+				return err
+			}
+			if s != "" {
+				out = append(out, s)
+			}
+		case yaml.MappingNode:
+			var long struct {
+				Target    int `yaml:"target"`
+				Published any `yaml:"published"`
+			}
+			if err := node.Decode(&long); err != nil {
+				return err
+			}
+			published := publishedString(long.Published)
+			switch {
+			case published != "" && long.Target > 0:
+				out = append(out, published+":"+strconv.Itoa(long.Target))
+			case long.Target > 0:
+				out = append(out, strconv.Itoa(long.Target))
+			}
+		}
+	}
+	*p = out
+	return nil
+}
+
+func publishedString(v any) string {
+	switch n := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return n
+	case int:
+		return strconv.Itoa(n)
+	case int64:
+		return strconv.FormatInt(n, 10)
+	case float64:
+		return strconv.Itoa(int(n))
+	default:
+		return fmt.Sprint(n)
+	}
 }
 
 // DependsOn supports both forms of the depends_on key:

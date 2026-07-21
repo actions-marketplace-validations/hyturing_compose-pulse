@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "id": "health.missing_executable",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "bad-health",
+  "effective_config": {
+    "services": [
+      {
+        "name": "api",
+        "image": "busybox:1.36",
+        "healthcheck": "curl -f http://localhost:8080/health || exit 1"
+      }
+    ]
+  },
+  "events": [
+    {
+      "run_id": "health.missing_executable",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "container",
+      "project": "bad-health",
+      "service": "api",
+      "container_id": "ch",
+      "phase": "started",
+      "type": "state",
+      "severity": "info",
+      "message": "Up",
+      "data": {"status": "Up"}
+    },
+    {
+      "run_id": "health.missing_executable",
+      "timestamp": "2026-07-22T00:00:02Z",
+      "source": "healthcheck",
+      "project": "bad-health",
+      "service": "api",
+      "container_id": "ch",
+      "phase": "failed",
+      "type": "state",
+      "severity": "error",
+      "message": "healthcheck failed: curl: not found",
+      "data": {
+        "health_status": "unhealthy",
+        "healthcheck_exit_code": 127,
+        "error_kind": "healthcheck_missing_executable"
+      }
+    }
+  ]
+}

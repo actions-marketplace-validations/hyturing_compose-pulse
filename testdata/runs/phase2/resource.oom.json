@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "id": "resource.oom",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "memlimit",
+  "events": [
+    {
+      "run_id": "resource.oom",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "resource",
+      "project": "memlimit",
+      "service": "worker",
+      "container_id": "cw",
+      "phase": "failed",
+      "type": "stats",
+      "severity": "error",
+      "message": "memory limit reached: cgroup out of memory",
+      "data": {
+        "error_kind": "memory_limit",
+        "memory_limit_bytes": 67108864
+      }
+    },
+    {
+      "run_id": "resource.oom",
+      "timestamp": "2026-07-22T00:00:02Z",
+      "source": "container",
+      "project": "memlimit",
+      "service": "worker",
+      "container_id": "cw",
+      "phase": "failed",
+      "type": "state",
+      "severity": "error",
+      "message": "Exited (137)",
+      "data": {"exit_code": 137, "oom_killed": true}
+    }
+  ]
+}

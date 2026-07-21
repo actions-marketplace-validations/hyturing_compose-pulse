@@ -100,7 +100,8 @@ func renderHelp(m Model) string {
 			fmt.Fprintf(&body, "  %-12s %s\n", e.key, e.desc)
 		}
 	}
-	body.WriteString("\n" + styleDim.Render("press ?, q, or esc to close"))
+	body.WriteString("\n")
+	body.WriteString(styleDim.Render("press ?, q, or esc to close"))
 
 	panelW := width - 10
 	if panelW > 60 {

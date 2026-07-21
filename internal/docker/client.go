@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/events"
 	dockerclient "github.com/docker/docker/client"
 )
 
@@ -38,6 +39,7 @@ type dockerAPI interface {
 	ContainerExecAttach(ctx context.Context, execID string, options container.ExecAttachOptions) (types.HijackedResponse, error)
 	ContainerExecInspect(ctx context.Context, execID string) (container.ExecInspect, error)
 	ContainerStatsOneShot(ctx context.Context, containerID string) (container.StatsResponseReader, error)
+	Events(ctx context.Context, options events.ListOptions) (<-chan events.Message, <-chan error)
 	Close() error
 }
 

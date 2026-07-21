@@ -1,0 +1,104 @@
+name: 'cpulse Compose diagnose'
+description: 'Record docker compose up and diagnose the run with cpulse (headless)'
+branding:
+  icon: 'activity'
+  color: 'blue'
+inputs:
+  compose-args:
+    description: 'Extra args after `docker compose up --wait`'
+    required: false
+    default: ''
+  fail-on:
+    description: 'Confidence threshold: high|medium|possible'
+    required: false
+    default: 'high'
+  db-path:
+    description: 'SQLite path for the recorded run'
+    required: false
+    default: '.cpulse/cpulse.db'
+  upload-html:
+    description: 'Upload HTML incident report as an artifact'
+    required: false
+    default: 'true'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install cpulse
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v cpulse >/dev/null 2>&1; then
+          echo "using existing cpulse: $(command -v cpulse)"
+        elif [[ -x "${{ github.action_path }}/bin/cpulse" ]]; then
+          echo "${{ github.action_path }}/bin" >> "$GITHUB_PATH"
+        else
+          echo "Building cpulse from workspace"
+          (cd "${{ github.workspace }}" && make build)
+          echo "${{ github.workspace }}/bin" >> "$GITHUB_PATH"
+        fi
+        cpulse --version
+
+    - name: Record compose up
+      id: record
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$(dirname "${{ inputs.db-path }}")"
+        # shellcheck disable=SC2086
+        cpulse record --db "${{ inputs.db-path }}" -- docker compose up --wait ${{ inputs.compose-args }} || {
+          code=$?
+          echo "record_exit=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+        }
+        echo "record_exit=0" >> "$GITHUB_OUTPUT"
+
+    - name: Doctor (SARIF + annotations)
+      id: doctor
+      shell: bash
+      run: |
+        set -euo pipefail
+        set +e
+        cpulse doctor --last --db "${{ inputs.db-path }}" --sarif --annotate --fail-on "${{ inputs.fail-on }}" > cpulse.sarif
+        code=$?
+        set -e
+        echo "doctor_exit=$code" >> "$GITHUB_OUTPUT"
+        if [[ "$code" -eq 4 ]]; then
+          exit 4
+        fi
+        exit 0
+
+    - name: HTML report
+      if: inputs.upload-html == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        cpulse report --last --db "${{ inputs.db-path }}" --format html --output cpulse-report.html || true
+
+    - name: Upload SARIF
+      uses: actions/upload-artifact@v4
+      with:
+        name: cpulse-sarif
+        path: cpulse.sarif
+        if-no-files-found: warn
+
+    - name: Upload HTML report
+      if: inputs.upload-html == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: cpulse-html-report
+        path: cpulse-report.html
+        if-no-files-found: warn
+
+    - name: Fail job on diagnosed failure
+      shell: bash
+      run: |
+        set -euo pipefail
+        code="${{ steps.doctor.outputs.doctor_exit }}"
+        if [[ "$code" == "1" ]]; then
+          echo "cpulse doctor reported confirmed failure(s)"
+          exit 1
+        fi
+        if [[ "${{ steps.record.outputs.record_exit }}" != "0" && "$code" == "0" ]]; then
+          echo "compose failed to launch cleanly"
+          exit 3
+        fi

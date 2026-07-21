@@ -1,0 +1,14 @@
+id: localhost-in-container
+category: network
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: service used localhost/127.0.0.1 to reach another container
+  service: api
+  confidence_minimum: high
+  rule_id: net.localhost_in_container
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "id": "image.platform_mismatch",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "arch-mismatch",
+  "events": [
+    {
+      "run_id": "image.platform_mismatch",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "compose",
+      "project": "arch-mismatch",
+      "service": "api",
+      "phase": "failed",
+      "type": "lifecycle",
+      "severity": "error",
+      "message": "image operating system \"linux\" cannot be used on this platform: no matching manifest for linux/arm64 in the manifest list entries",
+      "data": {
+        "progress_kind": "arch_mismatch",
+        "image": "example/api:amd64-only"
+      }
+    }
+  ]
+}

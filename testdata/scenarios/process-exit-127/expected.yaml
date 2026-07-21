@@ -1,0 +1,14 @@
+id: process-exit-127
+category: process
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: command not found (exit 127)
+  service: app
+  confidence_minimum: high
+  rule_id: process.exit_127
+  evidence: []
+  blocked_services: []
+must_not_report: []
+source:
+  type: synthetic

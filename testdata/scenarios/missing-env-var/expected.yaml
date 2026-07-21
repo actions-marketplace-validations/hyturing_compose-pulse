@@ -1,0 +1,16 @@
+id: missing-env-var
+category: config
+difficulty: easy
+platforms: [linux-amd64, linux-arm64, darwin-arm64]
+expected:
+  root_cause: required environment variable is unset
+  service: app
+  confidence_minimum: high
+  evidence:
+    - variable
+  blocked_services: []
+must_not_report:
+  - port.host_occupied
+  - name.container_conflict
+source:
+  type: synthetic

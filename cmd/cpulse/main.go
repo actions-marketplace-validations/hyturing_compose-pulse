@@ -18,8 +18,12 @@ var version = "dev"
 
 func main() {
 	if err := run(); err != nil {
-		if errors.Is(err, errCriticalFindings) {
-			os.Exit(1)
+		var exitErr exitCodeError
+		if errors.As(err, &exitErr) {
+			if exitErr.msg != "" {
+				fmt.Fprintf(os.Stderr, "cpulse: %v\n", err)
+			}
+			os.Exit(exitErr.code)
 		}
 		fmt.Fprintf(os.Stderr, "cpulse: %v\n", err)
 		os.Exit(1)
@@ -31,6 +35,20 @@ func run() error {
 		switch os.Args[1] {
 		case "doctor":
 			return cmdDoctor(os.Args[2:])
+		case "replay":
+			return cmdReplay(os.Args[2:])
+		case "record":
+			return cmdRecord(os.Args[2:])
+		case "up":
+			return cmdUp(os.Args[2:])
+		case "probe":
+			return cmdProbe(os.Args[2:])
+		case "compare":
+			return cmdCompare(os.Args[2:])
+		case "report":
+			return cmdReport(os.Args[2:])
+		case "test-startup":
+			return cmdTestStartup(os.Args[2:])
 		case "help", "-h", "--help":
 			printUsage()
 			return nil
@@ -70,11 +88,43 @@ func printUsage() {
 
 Usage:
   cpulse              Launch the TUI dashboard
-  cpulse doctor       Diagnose why a stack is stuck
+  cpulse doctor       Live diagnose (default) or headless over a recorded run
+  cpulse record -- <cmd>
+                      Record a Compose invocation (flight recorder)
+  cpulse up [args]    Alias for: cpulse record -- docker compose up [args]
+  cpulse replay FILE  Replay a recorded run.json through the run model
+  cpulse probe <svc> <host:port>
+                      Run dependency probe chain from a service's network
+  cpulse compare --last successful
+                      Compare current run critical path to baseline
+  cpulse report --last --format <md|json|html|sarif>
+                      Shareable incident report from last recorded run
+  cpulse test-startup [--] [compose-up-args]
+                      Headless record+diagnose of docker compose up --wait
   cpulse --version    Print version
 
 Doctor flags:
+  --project NAME      Limit to one compose project (live mode)
+  --json / --sarif    Headless report formats over a recorded run
+  --last / --run ID   Select run from SQLite
+  --file PATH         Diagnose a run.json fixture
+  --db FILE           SQLite path (default: .cpulse/cpulse.db)
+  --fail-on LEVEL     high|medium|possible (default high)
+  --annotate          Emit GitHub Actions annotations on stderr
+
+Record flags:
+  --output FILE       JSON export path
+  --db FILE           SQLite path
+  --include-env-values
+                      Persist env values (secrets still redacted)
+
+Probe flags:
   --project NAME      Limit to one compose project
+  --tls               Require TLS handshake
+  --http PATH         Also perform HTTP GET on PATH
+
+Exit codes (doctor/test-startup CI paths):
+  0 healthy · 1 confirmed failure · 2 timeout · 3 launch fail · 4 usage
 
 `, version)
 }

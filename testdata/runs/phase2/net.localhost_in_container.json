@@ -1,0 +1,58 @@
+{
+  "schema_version": 2,
+  "id": "net.localhost_in_container",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "localhost-bug",
+  "effective_config": {
+    "services": [
+      {
+        "name": "api",
+        "image": "busybox:1.36",
+        "depends_on": {"db": "service_started"}
+      },
+      {
+        "name": "db",
+        "image": "postgres:16"
+      }
+    ]
+  },
+  "events": [
+    {
+      "run_id": "net.localhost_in_container",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "container",
+      "project": "localhost-bug",
+      "service": "db",
+      "container_id": "cdb",
+      "phase": "healthy",
+      "type": "state",
+      "severity": "info",
+      "message": "Up (healthy)"
+    },
+    {
+      "run_id": "net.localhost_in_container",
+      "timestamp": "2026-07-22T00:00:02Z",
+      "source": "log",
+      "project": "localhost-bug",
+      "service": "api",
+      "container_id": "capi",
+      "phase": "failed",
+      "type": "log",
+      "severity": "error",
+      "message": "dial tcp 127.0.0.1:5432: connect: connection refused"
+    },
+    {
+      "run_id": "net.localhost_in_container",
+      "timestamp": "2026-07-22T00:00:03Z",
+      "source": "container",
+      "project": "localhost-bug",
+      "service": "api",
+      "container_id": "capi",
+      "phase": "failed",
+      "type": "state",
+      "severity": "error",
+      "message": "Exited (1)",
+      "data": {"exit_code": 1}
+    }
+  ]
+}

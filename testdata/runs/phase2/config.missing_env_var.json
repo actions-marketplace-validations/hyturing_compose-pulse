@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "id": "config.missing_env_var",
+  "started_at": "2026-07-22T00:00:00Z",
+  "project": "missing-env",
+  "events": [
+    {
+      "run_id": "config.missing_env_var",
+      "timestamp": "2026-07-22T00:00:01Z",
+      "source": "compose",
+      "project": "missing-env",
+      "service": "app",
+      "phase": "failed",
+      "type": "lifecycle",
+      "severity": "error",
+      "message": "error while interpolating services.app.environment.REQUIRED_VAR: required variable REQUIRED_VAR is missing a value: REQUIRED_VAR must be set",
+      "data": {
+        "error_kind": "missing_env_var",
+        "variable": "REQUIRED_VAR"
+      }
+    }
+  ]
+}

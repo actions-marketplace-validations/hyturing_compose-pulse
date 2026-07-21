@@ -12,6 +12,7 @@ import (
 	"github.com/hyturing/compose-pulse/internal/discover"
 	"github.com/hyturing/compose-pulse/internal/docker"
 	"github.com/hyturing/compose-pulse/internal/doctor"
+	"github.com/hyturing/compose-pulse/internal/model"
 	"github.com/hyturing/compose-pulse/internal/probe"
 	"github.com/hyturing/compose-pulse/internal/timeline"
 )
@@ -103,9 +104,10 @@ func nextSelectable(rows []Row, cur, delta int) int {
 // Model is the root Bubble Tea model.
 type Model struct {
 	snapshot *discover.Snapshot
+	run      *model.Run
 	rows     []Row
 	docker   *docker.Client
-	pollCh   <-chan docker.PollMsg
+	runCh    <-chan RunUpdateMsg
 	cancel   context.CancelFunc
 
 	viewMode    viewMode
@@ -145,7 +147,7 @@ type Model struct {
 	// Task 2.1: on-demand, cached docker inspect per container.
 	inspects map[string]*docker.InspectInfo
 
-	// Task 2.6: startup timeline tracker, observed every PollMsg.
+	// Task 2.6: startup timeline tracker, observed every run update.
 	timeline *timeline.Tracker
 
 	// Task 2.9: per-container stats ring buffers, fed by a separate 2s ticker.
@@ -189,16 +191,18 @@ type Model struct {
 	execActive      bool
 }
 
-// New creates the initial model and starts the Docker polling goroutine.
+// New creates the initial model and starts the poll→normalize→run feed.
 func New(snap *discover.Snapshot, dc *docker.Client) Model {
 	ctx, cancel := context.WithCancel(context.Background())
 	rows := BuildRows(snap)
+	run := newLiveRun()
 	m := Model{
 		snapshot:       snap,
+		run:            run,
 		rows:           rows,
 		cursor:         firstSelectable(rows),
 		docker:         dc,
-		pollCh:         dc.StartPollCh(ctx),
+		runCh:          startPollFeed(ctx, dc, run),
 		cancel:         cancel,
 		logFollow:      true,
 		lastPoll:       time.Now(),
@@ -210,15 +214,8 @@ func New(snap *discover.Snapshot, dc *docker.Client) Model {
 	return m
 }
 
-func waitForPoll(ch <-chan docker.PollMsg) tea.Cmd {
-	return func() tea.Msg {
-		msg, ok := <-ch
-		if !ok {
-			return nil
-		}
-		return msg
-	}
-}
+// Run returns the current normalized run aggregate (shared with CLI/replay).
+func (m Model) Run() *model.Run { return m.run }
 
 func tickCmd() tea.Cmd {
 	return tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg {
@@ -226,9 +223,9 @@ func tickCmd() tea.Cmd {
 	})
 }
 
-// Init starts the spinner ticker and begins listening for poll/stats updates.
+// Init starts the spinner ticker and begins listening for run/stats updates.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), waitForPoll(m.pollCh), statsTickCmd(), m.syncSelectionStream())
+	return tea.Batch(tickCmd(), waitForRunUpdate(m.runCh), statsTickCmd(), m.syncSelectionStream())
 }
 
 // Update routes incoming messages, mutating model state and returning any
@@ -259,13 +256,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.copyNoticeTicks = 10
 		return m, nil
 
-	case docker.PollMsg:
+	case RunUpdateMsg:
 		m.lastPoll = time.Now()
-		rebuilt, _ := m.applySnapshot(msg.Containers)
+		rebuilt := m.applyRunUpdate(msg)
 		if m.timeline != nil {
 			m.timeline.Observe(m.snapshot, time.Now())
 		}
-		cmds := []tea.Cmd{waitForPoll(m.pollCh)}
+		cmds := []tea.Cmd{waitForRunUpdate(m.runCh)}
 		if rebuilt {
 			cmds = append(cmds, m.syncSelectionStream())
 		}
@@ -449,10 +446,13 @@ func inspectCmd(dc *docker.Client, containerID string) tea.Cmd {
 	}
 }
 
-func (m *Model) applySnapshot(containers []docker.ContainerInfo) (rebuilt bool, err error) {
-	newSnap, err := discover.FromContainers(containers)
-	if err != nil {
-		return false, err
+func (m *Model) applyRunUpdate(msg RunUpdateMsg) (rebuilt bool) {
+	if msg.Run != nil {
+		m.run = msg.Run
+	}
+	newSnap := msg.Snapshot
+	if newSnap == nil {
+		return false
 	}
 
 	visible := m.visibleRows()
@@ -465,7 +465,7 @@ func (m *Model) applySnapshot(containers []docker.ContainerInfo) (rebuilt bool, 
 		m.snapshot.ApplyStatesFrom(newSnap)
 		m.relocateCursor(prevKey)
 		m.clampGraphScroll()
-		return false, nil
+		return false
 	}
 
 	m.snapshot = newSnap
@@ -475,7 +475,16 @@ func (m *Model) applySnapshot(containers []docker.ContainerInfo) (rebuilt bool, 
 	}
 	m.relocateCursor(prevKey)
 	m.clampGraphScroll()
-	return true, nil
+	return true
+}
+
+// applySnapshot is retained for unit tests that feed container fixtures directly.
+func (m *Model) applySnapshot(containers []docker.ContainerInfo) (rebuilt bool, err error) {
+	newSnap, err := discover.FromContainers(containers)
+	if err != nil {
+		return false, err
+	}
+	return m.applyRunUpdate(RunUpdateMsg{Snapshot: newSnap, Run: m.run}), nil
 }
 
 // relocateCursor re-locates the cursor by rowKey within the current visible
